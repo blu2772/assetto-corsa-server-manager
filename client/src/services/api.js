@@ -23,6 +23,39 @@ export const carModsApi = {
     }
   },
   
+  // Standard-Autos abrufen
+  getStockCars: async () => {
+    try {
+      const response = await apiClient.get('/stock-cars');
+      return response.data;
+    } catch (error) {
+      console.error('Fehler beim Abrufen der Standard-Autos:', error);
+      throw error;
+    }
+  },
+  
+  // Alle Autos (Standard und Mods) abrufen
+  getAllCarsAndStock: async () => {
+    try {
+      // Versuche zuerst den all-cars Endpunkt
+      try {
+        const response = await apiClient.get('/all-cars');
+        return response.data;
+      } catch (allCarsError) {
+        // Fallback: Beide Anfragen separat ausführen und selbst kombinieren
+        const [standardCars, modCars] = await Promise.all([
+          carModsApi.getStockCars().catch(() => []),
+          carModsApi.getAllCars()
+        ]);
+        
+        return [...standardCars, ...modCars];
+      }
+    } catch (error) {
+      console.error('Fehler beim Abrufen aller Autos:', error);
+      throw error;
+    }
+  },
+  
   // Car-Mod hochladen
   uploadCar: async (carModFile) => {
     try {
@@ -52,6 +85,39 @@ export const trackModsApi = {
       return response.data;
     } catch (error) {
       console.error('Fehler beim Abrufen der Track-Mods:', error);
+      throw error;
+    }
+  },
+  
+  // Standard-Strecken abrufen
+  getStockTracks: async () => {
+    try {
+      const response = await apiClient.get('/stock-tracks');
+      return response.data;
+    } catch (error) {
+      console.error('Fehler beim Abrufen der Standard-Strecken:', error);
+      throw error;
+    }
+  },
+  
+  // Alle Strecken (Standard und Mods) abrufen
+  getAllTracksAndStock: async () => {
+    try {
+      // Versuche zuerst den all-tracks Endpunkt
+      try {
+        const response = await apiClient.get('/all-tracks');
+        return response.data;
+      } catch (allTracksError) {
+        // Fallback: Beide Anfragen separat ausführen und selbst kombinieren
+        const [standardTracks, modTracks] = await Promise.all([
+          trackModsApi.getStockTracks().catch(() => []),
+          trackModsApi.getAllTracks()
+        ]);
+        
+        return [...standardTracks, ...modTracks];
+      }
+    } catch (error) {
+      console.error('Fehler beim Abrufen aller Strecken:', error);
       throw error;
     }
   },
@@ -121,6 +187,28 @@ export const serverApi = {
       throw error;
     }
   },
+  
+  // AC-Konfiguration aktualisieren
+  updateACConfig: async (installPath) => {
+    try {
+      const response = await apiClient.post('/ac-config', { installPath });
+      return response.data;
+    } catch (error) {
+      console.error('Fehler beim Aktualisieren der AC-Konfiguration:', error);
+      throw error;
+    }
+  },
+  
+  // AC Server-Pfad aktualisieren
+  updateServerPath: async (serverPath) => {
+    try {
+      const response = await apiClient.post('/server-path', { serverPath });
+      return response.data;
+    } catch (error) {
+      console.error('Fehler beim Aktualisieren des Server-Pfads:', error);
+      throw error;
+    }
+  }
 };
 
 // Exportiere alle API-Dienste
