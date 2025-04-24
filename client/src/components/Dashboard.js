@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Card, Button, Row, Col, Alert, InputGroup, Form, Spinner } from 'react-bootstrap';
+import React, { useState, useEffect, useRef } from 'react';
+import { Card, Button, Row, Col, Alert, InputGroup, Form, Spinner, Image } from 'react-bootstrap';
 import { toast } from 'react-toastify';
-import { FaPlay, FaStop, FaCar, FaRoad, FaLink, FaCopy, FaGamepad, FaGlobe } from 'react-icons/fa';
+import { FaPlay, FaStop, FaCar, FaRoad, FaLink, FaCopy, FaGamepad, FaGlobe, FaQrcode } from 'react-icons/fa';
 import { serverApi, carModsApi, trackModsApi } from '../services/api';
 import ServerTerminal from './ServerTerminal';
 
@@ -15,6 +15,9 @@ const Dashboard = ({ serverStatus, onStatusChange }) => {
   const [loadingConnectionInfo, setLoadingConnectionInfo] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   
+  const qrCodeRef = useRef(null);
+  const [qrCodeUrl, setQrCodeUrl] = useState('');
+  
   useEffect(() => {
     fetchStats();
     fetchConnectionInfo();
@@ -25,6 +28,14 @@ const Dashboard = ({ serverStatus, onStatusChange }) => {
       fetchConnectionInfo();
     }
   }, [serverStatus]);
+  
+  useEffect(() => {
+    if (connectionInfo && connectionInfo.ipAddress) {
+      // Google Charts API für QR-Code Generierung
+      const qrCodeData = `https://chart.googleapis.com/chart?cht=qr&chs=200x200&chl=${encodeURIComponent(connectionInfo.contentManagerLink)}&choe=UTF-8`;
+      setQrCodeUrl(qrCodeData);
+    }
+  }, [connectionInfo]);
   
   const fetchStats = async () => {
     try {
@@ -174,6 +185,41 @@ const Dashboard = ({ serverStatus, onStatusChange }) => {
               Öffnen
             </Button>
           </InputGroup>
+          
+          <div className="mb-3">
+            <Button 
+              variant="outline-success" 
+              as="a" 
+              href={`ac://${connectionInfo.ipAddress}:${connectionInfo.port}`}
+              className="me-2"
+            >
+              Alternative Verbindung
+            </Button>
+            <Button 
+              variant="outline-secondary" 
+              onClick={() => {
+                if (qrCodeRef.current) {
+                  const isVisible = qrCodeRef.current.style.display !== 'none';
+                  qrCodeRef.current.style.display = isVisible ? 'none' : 'block';
+                }
+              }}
+            >
+              <FaQrcode className="me-2" /> QR-Code {qrCodeRef.current?.style.display !== 'none' ? 'ausblenden' : 'anzeigen'}
+            </Button>
+          </div>
+          
+          <div 
+            ref={qrCodeRef} 
+            className="mb-3 text-center" 
+            style={{ display: 'none' }}
+          >
+            {qrCodeUrl && (
+              <div>
+                <p>Scannen Sie diesen QR-Code mit Ihrem Mobilgerät:</p>
+                <Image src={qrCodeUrl} alt="QR Code für Server-Verbindung" fluid />
+              </div>
+            )}
+          </div>
           
           <h5><FaGlobe className="me-2" /> Direkte HTTP-Verbindung</h5>
           <InputGroup className="mb-3">
