@@ -37,25 +37,148 @@ const trackStorage = multer.diskStorage({
 const uploadCar = multer({ storage: carStorage });
 const uploadTrack = multer({ storage: trackStorage });
 
-// Assetto Corsa Konfiguration
-const acConfig = {
-  // Pfad zur Assetto Corsa Installation
-  installPath: '/pfad/zu/assetto-corsa', // Linux-Pfad - anpassen nach tatsächlichem Pfad
-  // Alternativ für Windows: 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\assettocorsa'
-  
-  // Pfad zu den Standard-Autos
-  carsPath: function() {
-    return path.join(this.installPath, 'content/cars');
+// Statische Liste von Standard-Autos in Assetto Corsa
+const stockCars = [
+  { id: 'abarth500', name: 'Abarth 500 EsseEsse', isStock: true },
+  { id: 'abarth500_s1', name: 'Abarth 500 S1', isStock: true },
+  { id: 'alfa_romeo_giulietta_qv', name: 'Alfa Romeo Giulietta QV', isStock: true },
+  { id: 'alfa_romeo_giulietta_qv_le', name: 'Alfa Romeo Giulietta QV LE', isStock: true },
+  { id: 'bmw_1m', name: 'BMW 1M', isStock: true },
+  { id: 'bmw_m3_e30', name: 'BMW M3 E30', isStock: true },
+  { id: 'bmw_m3_e30_drift', name: 'BMW M3 E30 Drift', isStock: true },
+  { id: 'bmw_m3_e30_dtm', name: 'BMW M3 E30 DTM', isStock: true },
+  { id: 'bmw_m3_e30_gra', name: 'BMW M3 E30 Group A', isStock: true },
+  { id: 'bmw_m3_e30_s1', name: 'BMW M3 E30 Step 1', isStock: true },
+  { id: 'bmw_m3_e92', name: 'BMW M3 E92', isStock: true },
+  { id: 'bmw_m3_e92_drift', name: 'BMW M3 E92 Drift', isStock: true },
+  { id: 'bmw_m3_e92_s1', name: 'BMW M3 E92 Step 1', isStock: true },
+  { id: 'bmw_m3_gt2', name: 'BMW M3 GT2', isStock: true },
+  { id: 'bmw_z4', name: 'BMW Z4', isStock: true },
+  { id: 'bmw_z4_drift', name: 'BMW Z4 Drift', isStock: true },
+  { id: 'bmw_z4_gt3', name: 'BMW Z4 GT3', isStock: true },
+  { id: 'bmw_z4_s1', name: 'BMW Z4 Step 1', isStock: true },
+  { id: 'ferrari_312t', name: 'Ferrari 312T', isStock: true },
+  { id: 'ferrari_458', name: 'Ferrari 458', isStock: true },
+  { id: 'ferrari_458_gt2', name: 'Ferrari 458 GT2', isStock: true },
+  { id: 'ferrari_458_s3', name: 'Ferrari 458 S3', isStock: true },
+  { id: 'ferrari_599xxevo', name: 'Ferrari 599XX Evo', isStock: true },
+  { id: 'ferrari_f40', name: 'Ferrari F40', isStock: true },
+  { id: 'ferrari_f40_s3', name: 'Ferrari F40 S3', isStock: true },
+  { id: 'ferrari_laferrari', name: 'Ferrari LaFerrari', isStock: true },
+  { id: 'ks_abarth500_assetto_corse', name: 'Abarth 500 Assetto Corse', isStock: true },
+  { id: 'ks_abarth_595ss', name: 'Abarth 595 SS', isStock: true },
+  { id: 'ks_abarth_595ss_s1', name: 'Abarth 595 SS S1', isStock: true },
+  { id: 'ks_abarth_595ss_s2', name: 'Abarth 595 SS S2', isStock: true },
+  { id: 'ks_alfa_33_stradale', name: 'Alfa Romeo 33 Stradale', isStock: true },
+  { id: 'ks_alfa_giulia_qv', name: 'Alfa Romeo Giulia Quadrifoglio', isStock: true },
+  { id: 'ks_alfa_mito_qv', name: 'Alfa Romeo MiTo QV', isStock: true },
+  { id: 'ks_audi_a1s1', name: 'Audi S1', isStock: true },
+  { id: 'ks_audi_r18_etron_quattro', name: 'Audi R18 e-tron quattro', isStock: true },
+  { id: 'ks_audi_r8_lms', name: 'Audi R8 LMS', isStock: true },
+  { id: 'ks_audi_r8_lms_2016', name: 'Audi R8 LMS 2016', isStock: true },
+  { id: 'ks_audi_r8_plus', name: 'Audi R8 V10 Plus', isStock: true },
+  { id: 'ks_audi_sport_quattro', name: 'Audi Sport Quattro', isStock: true },
+  { id: 'ks_audi_sport_quattro_rally', name: 'Audi Sport Quattro Rally', isStock: true },
+  { id: 'ks_audi_sport_quattro_s1', name: 'Audi Sport Quattro S1 E2', isStock: true },
+  { id: 'ks_audi_tt_cup', name: 'Audi TT Cup', isStock: true },
+  { id: 'ks_audi_tt_vln', name: 'Audi TT RS VLN', isStock: true },
+  // ... weitere Autos könnten hier hinzugefügt werden
+];
+
+// Statische Liste von Standard-Strecken in Assetto Corsa
+const stockTracks = [
+  { 
+    name: 'monza', 
+    layouts: ['', 'junior'], 
+    isStock: true 
   },
-  
-  // Pfad zu den Standard-Strecken
-  tracksPath: function() {
-    return path.join(this.installPath, 'content/tracks');
+  { 
+    name: 'imola', 
+    layouts: [''], 
+    isStock: true 
   },
-  
-  // Pfad zur Server-Executable
-  serverPath: '/pfad/zu/acServer' // Linux-Pfad - anpassen nach tatsächlichem Pfad
-};
+  { 
+    name: 'mugello', 
+    layouts: [''], 
+    isStock: true 
+  },
+  { 
+    name: 'silverstone', 
+    layouts: ['', 'international', 'national'], 
+    isStock: true 
+  },
+  { 
+    name: 'barcelona', 
+    layouts: ['', 'moto', 'national', 'nocurve', 'hotlap'], 
+    isStock: true 
+  },
+  { 
+    name: 'spa', 
+    layouts: [''], 
+    isStock: true 
+  },
+  { 
+    name: 'nurburgring', 
+    layouts: ['', 'sprint_a', 'sprint_b', 'sprint', 'endurance', 'nordschleife', 'touristenfahrten'], 
+    isStock: true 
+  },
+  { 
+    name: 'brands_hatch', 
+    layouts: ['', 'indy'], 
+    isStock: true 
+  },
+  { 
+    name: 'vallelunga', 
+    layouts: ['', 'club'], 
+    isStock: true 
+  },
+  { 
+    name: 'ks_black_cat_county', 
+    layouts: ['', 'configuration_1', 'configuration_2', 'layout_1', 'layout_2', 'layout_3'], 
+    isStock: true 
+  },
+  { 
+    name: 'drag1000', 
+    layouts: [''], 
+    isStock: true 
+  },
+  { 
+    name: 'drag400', 
+    layouts: [''], 
+    isStock: true 
+  },
+  { 
+    name: 'drift', 
+    layouts: [''], 
+    isStock: true 
+  },
+  { 
+    name: 'ks_highlands', 
+    layouts: ['', 'drift', 'mini', 'short', 'sprint'], 
+    isStock: true 
+  },
+  { 
+    name: 'ks_laguna_seca', 
+    layouts: [''], 
+    isStock: true 
+  },
+  { 
+    name: 'ks_nordschleife', 
+    layouts: ['', 'endurance', 'touristenfahrten', 'sprint_b', 'sprint_a', 'sprint'], 
+    isStock: true 
+  },
+  { 
+    name: 'ks_red_bull_ring', 
+    layouts: ['', 'national', 'layout_c'], 
+    isStock: true 
+  },
+  { 
+    name: 'ks_zandvoort', 
+    layouts: ['', 'national', 'club'], 
+    isStock: true 
+  },
+  // ... weitere Strecken könnten hier hinzugefügt werden
+];
 
 // Assetto Corsa Server Konfiguration
 const acServerConfig = {
@@ -71,6 +194,9 @@ const acServerConfig = {
   adminPassword: 'adminpass'
 };
 
+// Pfad zur Server-Executable
+let acServerPath = '/pfad/zu/acServer'; // Anpassen nach tatsächlichem Pfad
+
 // Aktuelle Serverprozess-ID
 let serverProcess = null;
 
@@ -79,27 +205,7 @@ let serverProcess = null;
 // Abrufen der verfügbaren Assetto Corsa Standard-Autos
 app.get('/api/stock-cars', async (req, res) => {
   try {
-    const stockCarsPath = acConfig.carsPath();
-    
-    // Prüfen, ob der Pfad existiert
-    if (!fs.existsSync(stockCarsPath)) {
-      return res.status(404).json({ 
-        error: 'Assetto Corsa Installationspfad nicht gefunden', 
-        path: stockCarsPath 
-      });
-    }
-    
-    // Standard-Autos auslesen
-    const carFolders = await fs.readdir(stockCarsPath);
-    const cars = carFolders.filter(item => 
-      fs.statSync(path.join(stockCarsPath, item)).isDirectory()
-    ).map(car => ({
-      id: car,
-      name: car,
-      isStock: true
-    }));
-    
-    res.json(cars);
+    res.json(stockCars);
   } catch (error) {
     console.error('Fehler beim Abrufen der Standard-Autos:', error);
     res.status(500).json({ error: 'Fehler beim Abrufen der Standard-Autos' });
@@ -109,51 +215,7 @@ app.get('/api/stock-cars', async (req, res) => {
 // Abrufen der verfügbaren Assetto Corsa Standard-Strecken
 app.get('/api/stock-tracks', async (req, res) => {
   try {
-    const stockTracksPath = acConfig.tracksPath();
-    
-    // Prüfen, ob der Pfad existiert
-    if (!fs.existsSync(stockTracksPath)) {
-      return res.status(404).json({ 
-        error: 'Assetto Corsa Installationspfad nicht gefunden', 
-        path: stockTracksPath 
-      });
-    }
-    
-    // Standard-Strecken auslesen
-    const trackFolders = await fs.readdir(stockTracksPath);
-    const tracks = await Promise.all(trackFolders.filter(item => 
-      fs.statSync(path.join(stockTracksPath, item)).isDirectory()
-    ).map(async track => {
-      const trackDir = path.join(stockTracksPath, track);
-      const files = await fs.readdir(trackDir);
-      
-      // Suche nach UI-Ordner und dann nach ui_track.json
-      const uiFolder = files.find(file => file.toLowerCase() === 'ui');
-      let layouts = [];
-      
-      if (uiFolder) {
-        const uiPath = path.join(trackDir, uiFolder);
-        try {
-          const uiFiles = await fs.readdir(uiPath);
-          const uiTrackFile = uiFiles.find(file => file.toLowerCase() === 'ui_track.json');
-          
-          if (uiTrackFile) {
-            const uiTrackData = await fs.readJson(path.join(uiPath, uiTrackFile));
-            layouts = uiTrackData.layouts || [];
-          }
-        } catch (error) {
-          console.error(`Fehler beim Lesen der Layouts für ${track}:`, error);
-        }
-      }
-      
-      return {
-        name: track,
-        layouts: layouts.map(layout => layout.name || ''),
-        isStock: true
-      };
-    }));
-    
-    res.json(tracks);
+    res.json(stockTracks);
   } catch (error) {
     console.error('Fehler beim Abrufen der Standard-Strecken:', error);
     res.status(500).json({ error: 'Fehler beim Abrufen der Standard-Strecken' });
@@ -283,14 +345,14 @@ app.get('/api/tracks', async (req, res) => {
 app.get('/api/all-cars', async (req, res) => {
   try {
     // Standard-Autos und Mods abrufen
-    const [stockResponse, modsResponse] = await Promise.all([
-      fetch(`http://localhost:${PORT}/api/stock-cars`).then(res => res.json()),
+    const [stockCarsResponse, modsResponse] = await Promise.all([
+      stockCars,
       fetch(`http://localhost:${PORT}/api/cars`).then(res => res.json())
     ]);
     
     // Alle Autos zusammenführen
     const allCars = [
-      ...stockResponse,
+      ...stockCarsResponse,
       ...modsResponse
     ];
     
@@ -305,14 +367,14 @@ app.get('/api/all-cars', async (req, res) => {
 app.get('/api/all-tracks', async (req, res) => {
   try {
     // Standard-Strecken und Mods abrufen
-    const [stockResponse, modsResponse] = await Promise.all([
-      fetch(`http://localhost:${PORT}/api/stock-tracks`).then(res => res.json()),
+    const [stockTracksResponse, modsResponse] = await Promise.all([
+      stockTracks,
       fetch(`http://localhost:${PORT}/api/tracks`).then(res => res.json())
     ]);
     
     // Alle Strecken zusammenführen
     const allTracks = [
-      ...stockResponse,
+      ...stockTracksResponse,
       ...modsResponse
     ];
     
@@ -347,53 +409,16 @@ app.post('/api/server/config', (req, res) => {
   }
 });
 
-// AC Installationspfad aktualisieren
-app.post('/api/ac-config', (req, res) => {
-  try {
-    const { installPath } = req.body;
-    
-    if (installPath) {
-      acConfig.installPath = installPath;
-      
-      // Testen, ob der Pfad korrekt ist
-      const carsPath = acConfig.carsPath();
-      const tracksPath = acConfig.tracksPath();
-      
-      if (!fs.existsSync(carsPath) || !fs.existsSync(tracksPath)) {
-        return res.status(400).json({ 
-          error: 'Ungültiger Assetto Corsa Installationspfad',
-          validCarsPath: fs.existsSync(carsPath),
-          validTracksPath: fs.existsSync(tracksPath)
-        });
-      }
-      
-      res.json({ 
-        message: 'Assetto Corsa Konfiguration aktualisiert',
-        config: {
-          installPath: acConfig.installPath,
-          carsPath: acConfig.carsPath(),
-          tracksPath: acConfig.tracksPath()
-        }
-      });
-    } else {
-      res.status(400).json({ error: 'Installationspfad muss angegeben werden' });
-    }
-  } catch (error) {
-    console.error('Fehler beim Aktualisieren der AC-Konfiguration:', error);
-    res.status(500).json({ error: 'Fehler beim Aktualisieren der AC-Konfiguration' });
-  }
-});
-
 // AC Server Pfad aktualisieren
 app.post('/api/server-path', (req, res) => {
   try {
     const { serverPath } = req.body;
     
     if (serverPath) {
-      acConfig.serverPath = serverPath;
+      acServerPath = serverPath;
       res.json({ 
         message: 'Assetto Corsa Server Pfad aktualisiert',
-        serverPath: acConfig.serverPath
+        serverPath: acServerPath
       });
     } else {
       res.status(400).json({ error: 'Server-Pfad muss angegeben werden' });
@@ -418,7 +443,7 @@ app.post('/api/server/start', (req, res) => {
     }
     
     // Server starten
-    serverProcess = exec(`${acConfig.serverPath}`, (error) => {
+    serverProcess = exec(`${acServerPath}`, (error) => {
       if (error) {
         console.error('Fehler beim Starten des Servers:', error);
         serverProcess = null;
