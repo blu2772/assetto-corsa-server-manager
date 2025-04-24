@@ -1,0 +1,136 @@
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f8f9fa;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+.main-container {
+  padding: 20px;
+}
+
+.navbar-brand {
+  font-weight: bold;
+}
+
+.card {
+  margin-bottom: 20px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.card-header {
+  font-weight: bold;
+  background-color: #f0f0f0;
+}
+
+.btn-primary {
+  background-color: #0056b3;
+}
+
+.btn-success {
+  background-color: #28a745;
+}
+
+.btn-danger {
+  background-color: #dc3545;
+}
+
+.file-upload-wrapper {
+  position: relative;
+  margin-bottom: 15px;
+}
+
+.file-upload-input {
+  position: relative;
+  z-index: 1;
+  opacity: 0;
+  width: 100%;
+  height: 40px;
+  cursor: pointer;
+}
+
+.file-upload-button {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 40px;
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f8f9fa;
+  border: 1px dashed #ced4da;
+  border-radius: 4px;
+  color: #6c757d;
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.file-upload-wrapper:hover .file-upload-button {
+  background-color: #e9ecef;
+}
+
+.file-selected .file-upload-button {
+  border-color: #28a745;
+  color: #28a745;
+  background-color: rgba(40, 167, 69, 0.1);
+}
+
+.server-status {
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+}
+
+.server-status-running {
+  background-color: rgba(40, 167, 69, 0.1);
+  color: #28a745;
+  border: 1px solid #28a745;
+}
+
+.server-status-stopped {
+  background-color: rgba(220, 53, 69, 0.1);
+  color: #dc3545;
+  border: 1px solid #dc3545;
+}
+
+.mod-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.mod-item {
+  padding: 10px;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  background-color: white;
+  transition: all 0.2s;
+}
+
+.mod-item:hover {
+  background-color: #f8f9fa;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.mod-item.selected {
+  border-color: #0056b3;
+  background-color: rgba(0, 86, 179, 0.1);
+}
+
+.car-preview-img, .track-preview-img {
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+  margin-bottom: 10px;
+} 
