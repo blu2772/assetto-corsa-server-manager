@@ -23,7 +23,7 @@ Eine Webanwendung zum Verwalten und Betreiben eines benutzerdefinierten Assetto 
 1. Repository klonen oder Dateien auf Ihren Server hochladen:
 
 ```bash
-git clone https://github.com/yourusername/assetto-corsa-server-manager.git
+git clone https://github.com/blu2772/assetto-corsa-server-manager.git
 cd assetto-corsa-server-manager
 ```
 
