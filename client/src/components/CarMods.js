@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Form, Row, Col, ListGroup } from 'react-bootstrap';
+import { Card, Button, Form, Row, Col, ListGroup, Nav, Tab } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import { FaUpload, FaCar } from 'react-icons/fa';
 import { carModsApi } from '../services/api';
 
 const CarMods = () => {
   const [cars, setCars] = useState([]);
+  const [stockCars, setStockCars] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('all');
   
   useEffect(() => {
     fetchCars();
+    fetchStockCars();
   }, []);
   
   const fetchCars = async () => {
@@ -24,6 +27,16 @@ const CarMods = () => {
       toast.error('Fehler beim Laden der Fahrzeuge');
     } finally {
       setLoading(false);
+    }
+  };
+  
+  const fetchStockCars = async () => {
+    try {
+      const stockCarsData = await carModsApi.getStockCars();
+      setStockCars(stockCarsData);
+    } catch (error) {
+      console.error('Fehler beim Laden der Standard-Fahrzeuge:', error);
+      toast.error('Fehler beim Laden der Standard-Fahrzeuge. Bitte konfigurieren Sie den Assetto Corsa Pfad.');
     }
   };
   
@@ -57,6 +70,43 @@ const CarMods = () => {
       setUploading(false);
     }
   };
+  
+  const renderCarList = (carList, isStock = false) => {
+    if (loading && !isStock) {
+      return <p>Fahrzeuge werden geladen...</p>;
+    }
+    
+    if (carList.length === 0) {
+      return (
+        <p>
+          {isStock 
+            ? 'Keine Standard-Fahrzeuge gefunden. Bitte konfigurieren Sie den Assetto Corsa Pfad.'
+            : 'Keine Fahrzeug-Mods gefunden. Laden Sie Mods hoch, um zu beginnen.'}
+        </p>
+      );
+    }
+    
+    return (
+      <div className="mod-list">
+        <ListGroup>
+          {carList.map((car, index) => (
+            <ListGroup.Item key={index} className="mod-item">
+              <div className="d-flex justify-content-between align-items-center">
+                <div>
+                  <FaCar className={`me-2 ${isStock ? 'text-success' : 'text-primary'}`} />
+                  <span className="fw-bold">{typeof car === 'string' ? car : car.name || car.id}</span>
+                  {isStock && <small className="ms-2 text-muted">(Standard)</small>}
+                </div>
+              </div>
+            </ListGroup.Item>
+          ))}
+        </ListGroup>
+      </div>
+    );
+  };
+  
+  // Kombiniere alle Autos für die "Alle"-Ansicht
+  const allCars = [...cars, ...stockCars];
   
   return (
     <div>
@@ -113,29 +163,40 @@ const CarMods = () => {
         <Col md={6}>
           <Card>
             <Card.Header>
-              <FaCar className="me-2" /> Verfügbare Fahrzeug-Mods ({cars.length})
+              <FaCar className="me-2" /> Verfügbare Fahrzeuge
             </Card.Header>
             <Card.Body>
-              {loading ? (
-                <p>Fahrzeuge werden geladen...</p>
-              ) : cars.length === 0 ? (
-                <p>Keine Fahrzeug-Mods gefunden. Laden Sie Mods hoch, um zu beginnen.</p>
-              ) : (
-                <div className="mod-list">
-                  <ListGroup>
-                    {cars.map((car, index) => (
-                      <ListGroup.Item key={index} className="mod-item">
-                        <div className="d-flex justify-content-between align-items-center">
-                          <div>
-                            <FaCar className="me-2 text-primary" />
-                            <span className="fw-bold">{car}</span>
-                          </div>
-                        </div>
-                      </ListGroup.Item>
-                    ))}
-                  </ListGroup>
-                </div>
-              )}
+              <Tab.Container id="car-tabs" activeKey={activeTab} onSelect={setActiveTab}>
+                <Nav variant="tabs" className="mb-3">
+                  <Nav.Item>
+                    <Nav.Link eventKey="all">
+                      Alle ({allCars.length})
+                    </Nav.Link>
+                  </Nav.Item>
+                  <Nav.Item>
+                    <Nav.Link eventKey="mods">
+                      Mods ({cars.length})
+                    </Nav.Link>
+                  </Nav.Item>
+                  <Nav.Item>
+                    <Nav.Link eventKey="stock">
+                      Standard ({stockCars.length})
+                    </Nav.Link>
+                  </Nav.Item>
+                </Nav>
+                
+                <Tab.Content>
+                  <Tab.Pane eventKey="all">
+                    {renderCarList(allCars)}
+                  </Tab.Pane>
+                  <Tab.Pane eventKey="mods">
+                    {renderCarList(cars)}
+                  </Tab.Pane>
+                  <Tab.Pane eventKey="stock">
+                    {renderCarList(stockCars, true)}
+                  </Tab.Pane>
+                </Tab.Content>
+              </Tab.Container>
             </Card.Body>
           </Card>
         </Col>
