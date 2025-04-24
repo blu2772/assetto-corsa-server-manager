@@ -37,6 +37,26 @@ const trackStorage = multer.diskStorage({
 const uploadCar = multer({ storage: carStorage });
 const uploadTrack = multer({ storage: trackStorage });
 
+// Assetto Corsa Konfiguration
+const acConfig = {
+  // Pfad zur Assetto Corsa Installation
+  installPath: '/pfad/zu/assetto-corsa', // Linux-Pfad - anpassen nach tatsächlichem Pfad
+  // Alternativ für Windows: 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\assettocorsa'
+  
+  // Pfad zu den Standard-Autos
+  carsPath: function() {
+    return path.join(this.installPath, 'content/cars');
+  },
+  
+  // Pfad zu den Standard-Strecken
+  tracksPath: function() {
+    return path.join(this.installPath, 'content/tracks');
+  },
+  
+  // Pfad zur Server-Executable
+  serverPath: '/pfad/zu/acServer' // Linux-Pfad - anpassen nach tatsächlichem Pfad
+};
+
 // Assetto Corsa Server Konfiguration
 const acServerConfig = {
   serverName: 'Mein Assetto Corsa Server',
@@ -51,13 +71,94 @@ const acServerConfig = {
   adminPassword: 'adminpass'
 };
 
-// Pfad zur Assetto Corsa Server-Executable
-let acServerPath = '/pfad/zu/acServer'; // Linux-Pfad - anpassen nach tatsächlichem Pfad
-
 // Aktuelle Serverprozess-ID
 let serverProcess = null;
 
 // API-Endpunkte
+
+// Abrufen der verfügbaren Assetto Corsa Standard-Autos
+app.get('/api/stock-cars', async (req, res) => {
+  try {
+    const stockCarsPath = acConfig.carsPath();
+    
+    // Prüfen, ob der Pfad existiert
+    if (!fs.existsSync(stockCarsPath)) {
+      return res.status(404).json({ 
+        error: 'Assetto Corsa Installationspfad nicht gefunden', 
+        path: stockCarsPath 
+      });
+    }
+    
+    // Standard-Autos auslesen
+    const carFolders = await fs.readdir(stockCarsPath);
+    const cars = carFolders.filter(item => 
+      fs.statSync(path.join(stockCarsPath, item)).isDirectory()
+    ).map(car => ({
+      id: car,
+      name: car,
+      isStock: true
+    }));
+    
+    res.json(cars);
+  } catch (error) {
+    console.error('Fehler beim Abrufen der Standard-Autos:', error);
+    res.status(500).json({ error: 'Fehler beim Abrufen der Standard-Autos' });
+  }
+});
+
+// Abrufen der verfügbaren Assetto Corsa Standard-Strecken
+app.get('/api/stock-tracks', async (req, res) => {
+  try {
+    const stockTracksPath = acConfig.tracksPath();
+    
+    // Prüfen, ob der Pfad existiert
+    if (!fs.existsSync(stockTracksPath)) {
+      return res.status(404).json({ 
+        error: 'Assetto Corsa Installationspfad nicht gefunden', 
+        path: stockTracksPath 
+      });
+    }
+    
+    // Standard-Strecken auslesen
+    const trackFolders = await fs.readdir(stockTracksPath);
+    const tracks = await Promise.all(trackFolders.filter(item => 
+      fs.statSync(path.join(stockTracksPath, item)).isDirectory()
+    ).map(async track => {
+      const trackDir = path.join(stockTracksPath, track);
+      const files = await fs.readdir(trackDir);
+      
+      // Suche nach UI-Ordner und dann nach ui_track.json
+      const uiFolder = files.find(file => file.toLowerCase() === 'ui');
+      let layouts = [];
+      
+      if (uiFolder) {
+        const uiPath = path.join(trackDir, uiFolder);
+        try {
+          const uiFiles = await fs.readdir(uiPath);
+          const uiTrackFile = uiFiles.find(file => file.toLowerCase() === 'ui_track.json');
+          
+          if (uiTrackFile) {
+            const uiTrackData = await fs.readJson(path.join(uiPath, uiTrackFile));
+            layouts = uiTrackData.layouts || [];
+          }
+        } catch (error) {
+          console.error(`Fehler beim Lesen der Layouts für ${track}:`, error);
+        }
+      }
+      
+      return {
+        name: track,
+        layouts: layouts.map(layout => layout.name || ''),
+        isStock: true
+      };
+    }));
+    
+    res.json(tracks);
+  } catch (error) {
+    console.error('Fehler beim Abrufen der Standard-Strecken:', error);
+    res.status(500).json({ error: 'Fehler beim Abrufen der Standard-Strecken' });
+  }
+});
 
 // Hochladen von Car-Mods
 app.post('/api/upload/car', uploadCar.single('carmod'), async (req, res) => {
@@ -118,7 +219,11 @@ app.get('/api/cars', async (req, res) => {
     const carFolders = await fs.readdir(carsDir);
     const cars = carFolders.filter(item => 
       fs.statSync(path.join(carsDir, item)).isDirectory()
-    );
+    ).map(car => ({
+      id: car,
+      name: car,
+      isStock: false
+    }));
     
     res.json(cars);
   } catch (error) {
@@ -162,7 +267,8 @@ app.get('/api/tracks', async (req, res) => {
       
       return {
         name: track,
-        layouts: layouts.map(layout => layout.name || '')
+        layouts: layouts.map(layout => layout.name || ''),
+        isStock: false
       };
     }));
     
@@ -170,6 +276,50 @@ app.get('/api/tracks', async (req, res) => {
   } catch (error) {
     console.error('Fehler beim Abrufen der Track-Mods:', error);
     res.status(500).json({ error: 'Fehler beim Abrufen der Track-Mods' });
+  }
+});
+
+// Abrufen aller verfügbaren Autos (Standard und Mods)
+app.get('/api/all-cars', async (req, res) => {
+  try {
+    // Standard-Autos und Mods abrufen
+    const [stockResponse, modsResponse] = await Promise.all([
+      fetch(`http://localhost:${PORT}/api/stock-cars`).then(res => res.json()),
+      fetch(`http://localhost:${PORT}/api/cars`).then(res => res.json())
+    ]);
+    
+    // Alle Autos zusammenführen
+    const allCars = [
+      ...stockResponse,
+      ...modsResponse
+    ];
+    
+    res.json(allCars);
+  } catch (error) {
+    console.error('Fehler beim Abrufen aller Autos:', error);
+    res.status(500).json({ error: 'Fehler beim Abrufen aller Autos' });
+  }
+});
+
+// Abrufen aller verfügbaren Strecken (Standard und Mods)
+app.get('/api/all-tracks', async (req, res) => {
+  try {
+    // Standard-Strecken und Mods abrufen
+    const [stockResponse, modsResponse] = await Promise.all([
+      fetch(`http://localhost:${PORT}/api/stock-tracks`).then(res => res.json()),
+      fetch(`http://localhost:${PORT}/api/tracks`).then(res => res.json())
+    ]);
+    
+    // Alle Strecken zusammenführen
+    const allTracks = [
+      ...stockResponse,
+      ...modsResponse
+    ];
+    
+    res.json(allTracks);
+  } catch (error) {
+    console.error('Fehler beim Abrufen aller Strecken:', error);
+    res.status(500).json({ error: 'Fehler beim Abrufen aller Strecken' });
   }
 });
 
@@ -197,6 +347,63 @@ app.post('/api/server/config', (req, res) => {
   }
 });
 
+// AC Installationspfad aktualisieren
+app.post('/api/ac-config', (req, res) => {
+  try {
+    const { installPath } = req.body;
+    
+    if (installPath) {
+      acConfig.installPath = installPath;
+      
+      // Testen, ob der Pfad korrekt ist
+      const carsPath = acConfig.carsPath();
+      const tracksPath = acConfig.tracksPath();
+      
+      if (!fs.existsSync(carsPath) || !fs.existsSync(tracksPath)) {
+        return res.status(400).json({ 
+          error: 'Ungültiger Assetto Corsa Installationspfad',
+          validCarsPath: fs.existsSync(carsPath),
+          validTracksPath: fs.existsSync(tracksPath)
+        });
+      }
+      
+      res.json({ 
+        message: 'Assetto Corsa Konfiguration aktualisiert',
+        config: {
+          installPath: acConfig.installPath,
+          carsPath: acConfig.carsPath(),
+          tracksPath: acConfig.tracksPath()
+        }
+      });
+    } else {
+      res.status(400).json({ error: 'Installationspfad muss angegeben werden' });
+    }
+  } catch (error) {
+    console.error('Fehler beim Aktualisieren der AC-Konfiguration:', error);
+    res.status(500).json({ error: 'Fehler beim Aktualisieren der AC-Konfiguration' });
+  }
+});
+
+// AC Server Pfad aktualisieren
+app.post('/api/server-path', (req, res) => {
+  try {
+    const { serverPath } = req.body;
+    
+    if (serverPath) {
+      acConfig.serverPath = serverPath;
+      res.json({ 
+        message: 'Assetto Corsa Server Pfad aktualisiert',
+        serverPath: acConfig.serverPath
+      });
+    } else {
+      res.status(400).json({ error: 'Server-Pfad muss angegeben werden' });
+    }
+  } catch (error) {
+    console.error('Fehler beim Aktualisieren des Server-Pfads:', error);
+    res.status(500).json({ error: 'Fehler beim Aktualisieren des Server-Pfads' });
+  }
+});
+
 // Starte den Assetto Corsa Server
 app.post('/api/server/start', (req, res) => {
   if (serverProcess) {
@@ -211,7 +418,7 @@ app.post('/api/server/start', (req, res) => {
     }
     
     // Server starten
-    serverProcess = exec(`${acServerPath}`, (error) => {
+    serverProcess = exec(`${acConfig.serverPath}`, (error) => {
       if (error) {
         console.error('Fehler beim Starten des Servers:', error);
         serverProcess = null;
