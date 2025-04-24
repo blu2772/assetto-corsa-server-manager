@@ -39,50 +39,154 @@ const uploadTrack = multer({ storage: trackStorage });
 
 // Statische Liste von Standard-Autos in Assetto Corsa
 const stockCars = [
+  { id: 'abarth500_assetto_corse', name: 'Abarth 500 Assetto Corse', isStock: true },
   { id: 'abarth500', name: 'Abarth 500 EsseEsse', isStock: true },
-  { id: 'abarth500_s1', name: 'Abarth 500 S1', isStock: true },
+  { id: 'abarth500_s1', name: 'Abarth 500 EsseEsse Step1', isStock: true },
+  { id: 'abarth595ss', name: 'Abarth 595 SS', isStock: true },
+  { id: 'abarth595ss_s1', name: 'Abarth 595 SS Step 1', isStock: true },
+  { id: 'abarth595ss_s2', name: 'Abarth 595 SS Step 2', isStock: true },
+  { id: 'alfa_romeo_155_v6', name: 'Alfa Romeo 155 TI V6', isStock: true },
+  { id: 'alfa_romeo_4c', name: 'Alfa Romeo 4C', isStock: true },
   { id: 'alfa_romeo_giulietta_qv', name: 'Alfa Romeo Giulietta QV', isStock: true },
-  { id: 'alfa_romeo_giulietta_qv_le', name: 'Alfa Romeo Giulietta QV LE', isStock: true },
+  { id: 'alfa_romeo_giulietta_qv_le', name: 'Alfa Romeo Giulietta QV Launch Edition 2014', isStock: true },
+  { id: 'alfa_romeo_gta', name: 'Alfa Romeo GTA', isStock: true },
+  { id: 'alfa_romeo_mito_qv', name: 'Alfa Romeo Mito QV', isStock: true },
+  { id: 'audi_r8_lms_ultra', name: 'Audi R8 LMS Ultra', isStock: true },
+  { id: 'audi_r8_v10_plus', name: 'Audi R8 V10 Plus', isStock: true },
+  { id: 'audi_s1', name: 'Audi S1', isStock: true },
+  { id: 'audi_sport_quattro', name: 'Audi Sport quattro', isStock: true },
+  { id: 'audi_sport_quattro_s1', name: 'Audi Sport quattro Step1', isStock: true },
   { id: 'bmw_1m', name: 'BMW 1M', isStock: true },
+  { id: 'bmw_1m_s3', name: 'BMW 1M Stage 3', isStock: true },
+  { id: 'bmw_m235i_racing', name: 'BMW M235i Racing', isStock: true },
   { id: 'bmw_m3_e30', name: 'BMW M3 E30', isStock: true },
   { id: 'bmw_m3_e30_drift', name: 'BMW M3 E30 Drift', isStock: true },
   { id: 'bmw_m3_e30_dtm', name: 'BMW M3 E30 DTM', isStock: true },
   { id: 'bmw_m3_e30_gra', name: 'BMW M3 E30 Group A', isStock: true },
-  { id: 'bmw_m3_e30_s1', name: 'BMW M3 E30 Step 1', isStock: true },
+  { id: 'bmw_m3_e30_s1', name: 'BMW M3 E30 Step1', isStock: true },
   { id: 'bmw_m3_e92', name: 'BMW M3 E92', isStock: true },
-  { id: 'bmw_m3_e92_drift', name: 'BMW M3 E92 Drift', isStock: true },
-  { id: 'bmw_m3_e92_s1', name: 'BMW M3 E92 Step 1', isStock: true },
+  { id: 'bmw_m3_e92_drift', name: 'BMW M3 E92 drift', isStock: true },
+  { id: 'bmw_m3_e92_s1', name: 'BMW M3 E92 Step1', isStock: true },
   { id: 'bmw_m3_gt2', name: 'BMW M3 GT2', isStock: true },
-  { id: 'bmw_z4', name: 'BMW Z4', isStock: true },
-  { id: 'bmw_z4_drift', name: 'BMW Z4 Drift', isStock: true },
+  { id: 'bmw_m4', name: 'BMW M4', isStock: true },
+  { id: 'bmw_m4_akrapovic', name: 'BMW M4 Akrapovic', isStock: true },
+  { id: 'bmw_z4_e89', name: 'BMW Z4 E89', isStock: true },
+  { id: 'bmw_z4_e89_drift', name: 'BMW Z4 E89 Drift', isStock: true },
+  { id: 'bmw_z4_e89_s1', name: 'BMW Z4 E89 Step1', isStock: true },
   { id: 'bmw_z4_gt3', name: 'BMW Z4 GT3', isStock: true },
-  { id: 'bmw_z4_s1', name: 'BMW Z4 Step 1', isStock: true },
+  { id: 'chevrolet_corvette_c7_stingray', name: 'Chevrolet Corvette C7 Stingray', isStock: true },
+  { id: 'chevrolet_corvette_c7r', name: 'Chevrolet Corvette C7R', isStock: true },
   { id: 'ferrari_312t', name: 'Ferrari 312T', isStock: true },
-  { id: 'ferrari_458', name: 'Ferrari 458', isStock: true },
   { id: 'ferrari_458_gt2', name: 'Ferrari 458 GT2', isStock: true },
-  { id: 'ferrari_458_s3', name: 'Ferrari 458 S3', isStock: true },
-  { id: 'ferrari_599xxevo', name: 'Ferrari 599XX Evo', isStock: true },
+  { id: 'ferrari_458_italia', name: 'Ferrari 458 Italia', isStock: true },
+  { id: 'ferrari_458_s3', name: 'Ferrari 458 Italia Stage 3', isStock: true },
+  { id: 'ferrari_488', name: 'Ferrari 488', isStock: true },
+  { id: 'ferrari_488_gt3', name: 'Ferrari 488 GT3', isStock: true },
+  { id: 'ferrari_599xxevo', name: 'Ferrari 599XX EVO', isStock: true },
+  { id: 'ferrari_f138', name: 'Ferrari F138', isStock: true },
   { id: 'ferrari_f40', name: 'Ferrari F40', isStock: true },
-  { id: 'ferrari_f40_s3', name: 'Ferrari F40 S3', isStock: true },
+  { id: 'ferrari_f40_s3', name: 'Ferrari F40 Stage 3', isStock: true },
+  { id: 'ferrari_fxxk', name: 'Ferrari FXXK', isStock: true },
   { id: 'ferrari_laferrari', name: 'Ferrari LaFerrari', isStock: true },
-  { id: 'ks_abarth500_assetto_corse', name: 'Abarth 500 Assetto Corse', isStock: true },
-  { id: 'ks_abarth_595ss', name: 'Abarth 595 SS', isStock: true },
-  { id: 'ks_abarth_595ss_s1', name: 'Abarth 595 SS S1', isStock: true },
-  { id: 'ks_abarth_595ss_s2', name: 'Abarth 595 SS S2', isStock: true },
-  { id: 'ks_alfa_33_stradale', name: 'Alfa Romeo 33 Stradale', isStock: true },
-  { id: 'ks_alfa_giulia_qv', name: 'Alfa Romeo Giulia Quadrifoglio', isStock: true },
-  { id: 'ks_alfa_mito_qv', name: 'Alfa Romeo MiTo QV', isStock: true },
-  { id: 'ks_audi_a1s1', name: 'Audi S1', isStock: true },
-  { id: 'ks_audi_r18_etron_quattro', name: 'Audi R18 e-tron quattro', isStock: true },
-  { id: 'ks_audi_r8_lms', name: 'Audi R8 LMS', isStock: true },
-  { id: 'ks_audi_r8_lms_2016', name: 'Audi R8 LMS 2016', isStock: true },
-  { id: 'ks_audi_r8_plus', name: 'Audi R8 V10 Plus', isStock: true },
-  { id: 'ks_audi_sport_quattro', name: 'Audi Sport Quattro', isStock: true },
-  { id: 'ks_audi_sport_quattro_rally', name: 'Audi Sport Quattro Rally', isStock: true },
-  { id: 'ks_audi_sport_quattro_s1', name: 'Audi Sport Quattro S1 E2', isStock: true },
-  { id: 'ks_audi_tt_cup', name: 'Audi TT Cup', isStock: true },
-  { id: 'ks_audi_tt_vln', name: 'Audi TT RS VLN', isStock: true },
-  // ... weitere Autos könnten hier hinzugefügt werden
+  { id: 'ferrari_sf15t', name: 'Ferrari SF15-T', isStock: true },
+  { id: 'ford_escort_rs1600', name: 'Ford Escort RS1600', isStock: true },
+  { id: 'ford_gt40', name: 'Ford GT40', isStock: true },
+  { id: 'ford_mustang_2015', name: 'Ford Mustang 2015', isStock: true },
+  { id: 'ktm_xbow_r', name: 'KTM X-Bow R', isStock: true },
+  { id: 'lamborghini_aventador_sv', name: 'Lamborghini Aventador SV', isStock: true },
+  { id: 'lamborghini_countach', name: 'Lamborghini Countach', isStock: true },
+  { id: 'lamborghini_countach_s1', name: 'Lamborghini Countach S1', isStock: true },
+  { id: 'lamborghini_gallardo_sl', name: 'Lamborghini Gallardo SL', isStock: true },
+  { id: 'lamborghini_gallardo_sl_s3', name: 'Lamborghini Gallardo SL Step3', isStock: true },
+  { id: 'lamborghini_huracan_gt3', name: 'Lamborghini Huracan GT3', isStock: true },
+  { id: 'lamborghini_huracan_st', name: 'Lamborghini Huracan ST', isStock: true },
+  { id: 'lamborghini_miura_sv', name: 'Lamborghini Miura P400 SV', isStock: true },
+  { id: 'lotus_2_eleven', name: 'Lotus 2 Eleven', isStock: true },
+  { id: 'lotus_2_eleven_gt4', name: 'Lotus 2 Eleven GT4', isStock: true },
+  { id: 'lotus_72d', name: 'Lotus 72D', isStock: true },
+  { id: 'lotus_98t', name: 'Lotus 98T', isStock: true },
+  { id: 'lotus_elise_sc', name: 'Lotus Elise SC', isStock: true },
+  { id: 'lotus_elise_sc_s1', name: 'Lotus Elise SC Step1', isStock: true },
+  { id: 'lotus_elise_sc_s2', name: 'Lotus Elise SC Step2', isStock: true },
+  { id: 'lotus_evora_gtc', name: 'Lotus Evora GTC', isStock: true },
+  { id: 'lotus_evora_gte', name: 'Lotus Evora GTE', isStock: true },
+  { id: 'lotus_evora_gte_carbon', name: 'Lotus Evora GTE Carbon', isStock: true },
+  { id: 'lotus_evora_gx', name: 'Lotus Evora GX', isStock: true },
+  { id: 'lotus_evora_s', name: 'Lotus Evora S', isStock: true },
+  { id: 'lotus_evora_s_s2', name: 'Lotus Evora S Stage 2', isStock: true },
+  { id: 'lotus_exige_240r', name: 'Lotus Exige 240R', isStock: true },
+  { id: 'lotus_exige_240r_s3', name: 'Lotus Exige 240R Stage3', isStock: true },
+  { id: 'lotus_exige_s', name: 'Lotus Exige S', isStock: true },
+  { id: 'lotus_exige_s_roadster', name: 'Lotus Exige S roadster', isStock: true },
+  { id: 'lotus_exige_scura', name: 'Lotus Exige Scura', isStock: true },
+  { id: 'lotus_exige_v6_cup', name: 'Lotus Exige V6 CUP', isStock: true },
+  { id: 'lotus_exos_125', name: 'Lotus Exos 125', isStock: true },
+  { id: 'lotus_exos_125_s1', name: 'Lotus Exos 125 Stage 1', isStock: true },
+  { id: 'lotus_type_25', name: 'Lotus Type 25', isStock: true },
+  { id: 'lotus_type_49', name: 'Lotus Type 49', isStock: true },
+  { id: 'maserati_250f_6c', name: 'Maserati 250F 6C', isStock: true },
+  { id: 'maserati_250f_t2_12c', name: 'Maserati 250F T2 12C', isStock: true },
+  { id: 'maserati_granturismo_mc_gt4', name: 'Maserati GranTurismo MC GT4', isStock: true },
+  { id: 'maserati_levante', name: 'Maserati Levante', isStock: true },
+  { id: 'maserati_mc12_gt1', name: 'Maserati MC12 GT1', isStock: true },
+  { id: 'mazda_mx5_cup', name: 'Mazda MX5 Cup', isStock: true },
+  { id: 'mazda_mx5_nd', name: 'Mazda MX5 ND', isStock: true },
+  { id: 'mazda_rx7_spirit_r', name: 'Mazda RX-7 Spirit R', isStock: true },
+  { id: 'mazda_rx7_tuned', name: 'Mazda RX-7 Tuned', isStock: true },
+  { id: 'mclaren_650s_gt3', name: 'McLaren 650S GT3', isStock: true },
+  { id: 'mclaren_f1_gtr', name: 'McLaren F1 GTR', isStock: true },
+  { id: 'mclaren_mp412c', name: 'McLaren MP4-12C', isStock: true },
+  { id: 'mclaren_mp412c_gt3', name: 'McLaren MP4-12C GT3', isStock: true },
+  { id: 'mclaren_p1', name: 'McLaren P1', isStock: true },
+  { id: 'mercedes_sls', name: 'Mercedes SLS AMG', isStock: true },
+  { id: 'mercedes_sls_gt3', name: 'Mercedes SLS AMG GT3', isStock: true },
+  { id: 'mercedes_190_evo2', name: 'Mercedes-Benz 190E EVO II', isStock: true },
+  { id: 'mercedes_amg_gt3', name: 'Mercedes-Benz AMG GT3', isStock: true },
+  { id: 'mercedes_c9', name: 'Mercedes-Benz C9 1989 LM', isStock: true },
+  { id: 'nissan_370z', name: 'Nissan 370z Nismo', isStock: true },
+  { id: 'nissan_gtr_gt3', name: 'Nissan GT-R GT3', isStock: true },
+  { id: 'nissan_gtr_nismo', name: 'Nissan GT-R NISMO', isStock: true },
+  { id: 'nissan_skyline_r34', name: 'Nissan Skyline GTR R34 V-Spec', isStock: true },
+  { id: 'p4-5_competizione', name: 'P4/5 Competizione 2011', isStock: true },
+  { id: 'pagani_huayra', name: 'Pagani Huayra', isStock: true },
+  { id: 'pagani_zonda_r', name: 'Pagani Zonda R', isStock: true },
+  { id: 'porsche_718_boxster_s', name: 'Porsche 718 Boxster S', isStock: true },
+  { id: 'porsche_718_cayman_s', name: 'Porsche 718 Cayman S', isStock: true },
+  { id: 'porsche_718_spyder_rs', name: 'Porsche 718 Spyder RS', isStock: true },
+  { id: 'porsche_908_lh', name: 'Porsche 908 Lang Heck', isStock: true },
+  { id: 'porsche_911_r', name: 'Porsche 911 R', isStock: true },
+  { id: 'porsche_911_rsr', name: 'Porsche 911 3.0 RSR', isStock: true },
+  { id: 'porsche_911_carrera_s', name: 'Porsche 911 991.2 Carrera S', isStock: true },
+  { id: 'porsche_911_gt1', name: 'Porsche 911 GT1', isStock: true },
+  { id: 'porsche_911_gt3_cup_2017', name: 'Porsche 911 GT3 Cup 2017', isStock: true },
+  { id: 'porsche_911_gt3_r_2016', name: 'Porsche 911 GT3 R 2016', isStock: true },
+  { id: 'porsche_911_gt3_rs', name: 'Porsche 911 GT3 RS', isStock: true },
+  { id: 'porsche_911_turbo_s', name: 'Porsche 911 Turbo S', isStock: true },
+  { id: 'porsche_917_k', name: 'Porsche 917 K', isStock: true },
+  { id: 'porsche_917_30', name: 'Porsche 917/30', isStock: true },
+  { id: 'porsche_918_spyder', name: 'Porsche 918 Spyder', isStock: true },
+  { id: 'porsche_919_hybrid_2015', name: 'Porsche 919 Hybrid 2015', isStock: true },
+  { id: 'porsche_919_hybrid_2016', name: 'Porsche 919 Hybrid 2016 LeMans', isStock: true },
+  { id: 'porsche_935_78', name: 'Porsche 935/78 ("Moby Dick")', isStock: true },
+  { id: 'porsche_962c_longtail', name: 'Porsche 962c long tail', isStock: true },
+  { id: 'porsche_962c_shorttail', name: 'Porsche 962c short tail', isStock: true },
+  { id: 'porsche_cayman_gt4', name: 'Porsche Cayman GT4', isStock: true },
+  { id: 'porsche_cayman_gt4_clubsport', name: 'Porsche Cayman GT4 Clubsport', isStock: true },
+  { id: 'porsche_macan', name: 'Porsche Macan Turbo', isStock: true },
+  { id: 'praga_r1', name: 'Praga R1', isStock: true },
+  { id: 'ruf_yellowbird', name: 'RUF CTR Yellowbird', isStock: true },
+  { id: 'ruf_rt12r', name: 'RUF RT12 R', isStock: true },
+  { id: 'ruf_rt12r_awd', name: 'RUF RT12 R AWD', isStock: true },
+  { id: 'scg003', name: 'SCG 003C', isStock: true },
+  { id: 'shelby_cobra_427sc', name: 'Shelby Cobra 427 S/C', isStock: true },
+  { id: 'tatuusfa1', name: 'Tatuus FA01', isStock: true },
+  { id: 'toyota_ae86', name: 'Toyota AE86', isStock: true },
+  { id: 'toyota_ae86_drift', name: 'Toyota AE86 Drift', isStock: true },
+  { id: 'toyota_ae86_tuned', name: 'Toyota AE86 Tuned', isStock: true },
+  { id: 'toyota_gt86', name: 'Toyota GT86', isStock: true },
+  { id: 'toyota_supra_mkiv', name: 'Toyota Supra MKIV', isStock: true },
+  { id: 'toyota_supra_mkiv_drift', name: 'Toyota Supra MKIV Drift', isStock: true },
+  { id: 'toyota_supra_mkiv_time_attack', name: 'Toyota Supra MKIV Time Attack', isStock: true },
 ];
 
 // Statische Liste von Standard-Strecken in Assetto Corsa
@@ -234,21 +338,50 @@ app.post('/api/upload/car', uploadCar.single('carmod'), async (req, res) => {
     }
     
     const filePath = req.file.path;
+    const fileExt = path.extname(filePath).toLowerCase();
+    let extracted = false;
+    let warning = null;
     
     // Wenn es eine ZIP-Datei ist, entpacken
-    if (path.extname(filePath).toLowerCase() === '.zip') {
-      await fs.createReadStream(filePath)
-        .pipe(unzipper.Extract({ path: path.join(__dirname, 'uploads/cars') }))
-        .promise();
-      
-      // ZIP-Datei nach dem Entpacken löschen
-      await fs.unlink(filePath);
+    if (fileExt === '.zip') {
+      try {
+        await fs.createReadStream(filePath)
+          .pipe(unzipper.Extract({ path: path.join(__dirname, 'uploads/cars') }))
+          .promise();
+        
+        // ZIP-Datei nach dem Entpacken löschen
+        await fs.unlink(filePath);
+        extracted = true;
+      } catch (error) {
+        console.error('Fehler beim Entpacken der ZIP-Datei:', error);
+        return res.status(500).json({ 
+          error: 'Fehler beim Entpacken der ZIP-Datei', 
+          details: error.message 
+        });
+      }
+    } else {
+      warning = 'Nicht-ZIP-Datei hochgeladen';
+      const message = 'Die Datei wurde hochgeladen, aber nicht automatisch entpackt. ' + 
+                     'Bitte entpacken Sie die Datei manuell im cars-Verzeichnis und starten Sie den Server neu.';
+      return res.json({ 
+        message: message, 
+        warning: warning, 
+        filename: req.file.originalname,
+        extracted: false
+      });
     }
     
-    res.json({ message: 'Car-Mod erfolgreich hochgeladen', filename: req.file.originalname });
+    res.json({ 
+      message: 'Car-Mod erfolgreich hochgeladen', 
+      filename: req.file.originalname,
+      extracted: extracted 
+    });
   } catch (error) {
     console.error('Fehler beim Hochladen des Car-Mods:', error);
-    res.status(500).json({ error: 'Fehler beim Hochladen des Car-Mods' });
+    res.status(500).json({ 
+      error: 'Fehler beim Hochladen des Car-Mods', 
+      details: error.message 
+    });
   }
 });
 
@@ -260,21 +393,50 @@ app.post('/api/upload/track', uploadTrack.single('trackmod'), async (req, res) =
     }
     
     const filePath = req.file.path;
+    const fileExt = path.extname(filePath).toLowerCase();
+    let extracted = false;
+    let warning = null;
     
     // Wenn es eine ZIP-Datei ist, entpacken
-    if (path.extname(filePath).toLowerCase() === '.zip') {
-      await fs.createReadStream(filePath)
-        .pipe(unzipper.Extract({ path: path.join(__dirname, 'uploads/tracks') }))
-        .promise();
-      
-      // ZIP-Datei nach dem Entpacken löschen
-      await fs.unlink(filePath);
+    if (fileExt === '.zip') {
+      try {
+        await fs.createReadStream(filePath)
+          .pipe(unzipper.Extract({ path: path.join(__dirname, 'uploads/tracks') }))
+          .promise();
+        
+        // ZIP-Datei nach dem Entpacken löschen
+        await fs.unlink(filePath);
+        extracted = true;
+      } catch (error) {
+        console.error('Fehler beim Entpacken der ZIP-Datei:', error);
+        return res.status(500).json({ 
+          error: 'Fehler beim Entpacken der ZIP-Datei', 
+          details: error.message 
+        });
+      }
+    } else {
+      warning = 'Nicht-ZIP-Datei hochgeladen';
+      const message = 'Die Datei wurde hochgeladen, aber nicht automatisch entpackt. ' + 
+                     'Bitte entpacken Sie die Datei manuell im tracks-Verzeichnis und starten Sie den Server neu.';
+      return res.json({ 
+        message: message, 
+        warning: warning, 
+        filename: req.file.originalname,
+        extracted: false
+      });
     }
     
-    res.json({ message: 'Track-Mod erfolgreich hochgeladen', filename: req.file.originalname });
+    res.json({ 
+      message: 'Track-Mod erfolgreich hochgeladen', 
+      filename: req.file.originalname,
+      extracted: extracted 
+    });
   } catch (error) {
     console.error('Fehler beim Hochladen des Track-Mods:', error);
-    res.status(500).json({ error: 'Fehler beim Hochladen des Track-Mods' });
+    res.status(500).json({ 
+      error: 'Fehler beim Hochladen des Track-Mods', 
+      details: error.message 
+    });
   }
 });
 
