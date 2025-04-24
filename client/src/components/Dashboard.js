@@ -3,6 +3,7 @@ import { Card, Button, Row, Col, Alert } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import { FaPlay, FaStop, FaCar, FaRoad } from 'react-icons/fa';
 import { serverApi, carModsApi, trackModsApi } from '../services/api';
+import ServerTerminal from './ServerTerminal';
 
 const Dashboard = ({ serverStatus, onStatusChange }) => {
   const [loading, setLoading] = useState(false);
@@ -60,38 +61,20 @@ const Dashboard = ({ serverStatus, onStatusChange }) => {
     }
   };
   
+  const handleTerminalAction = (action) => {
+    if (action === 'start' || action === 'stop') {
+      onStatusChange();
+    }
+  };
+  
   return (
     <div>
       <h1 className="mb-4">Dashboard</h1>
       
-      <div className={`server-status ${serverStatus.running ? 'server-status-running' : 'server-status-stopped'}`}>
-        <h4>
-          {serverStatus.running ? 'Server läuft' : 'Server ist gestoppt'}
-        </h4>
-        <p>
-          {serverStatus.running 
-            ? 'Der Assetto Corsa Server ist aktiv und Spieler können beitreten.' 
-            : 'Der Assetto Corsa Server ist derzeit nicht aktiv.'}
-        </p>
-        
-        {serverStatus.running ? (
-          <Button 
-            variant="danger" 
-            onClick={handleStopServer} 
-            disabled={loading}
-          >
-            <FaStop className="me-2" /> Server stoppen
-          </Button>
-        ) : (
-          <Button 
-            variant="success" 
-            onClick={handleStartServer} 
-            disabled={loading}
-          >
-            <FaPlay className="me-2" /> Server starten
-          </Button>
-        )}
-      </div>
+      <ServerTerminal 
+        serverStatus={serverStatus} 
+        onAction={handleTerminalAction} 
+      />
       
       <Row className="mt-4">
         <Col md={6}>
