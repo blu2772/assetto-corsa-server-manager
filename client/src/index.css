@@ -133,4 +133,81 @@ code {
   height: auto;
   border-radius: 4px;
   margin-bottom: 10px;
+}
+
+/* Terminal-Stile */
+.server-terminal {
+  font-family: 'Courier New', monospace;
+  background-color: #1e1e1e;
+  color: #dcdcdc;
+  border-radius: 4px;
+  overflow-y: auto;
+  height: 400px;
+  padding: 10px;
+  white-space: pre-wrap;
+  line-height: 1.4;
+  font-size: 0.9rem;
+}
+
+.terminal-line {
+  margin-bottom: 2px;
+}
+
+.terminal-line-error {
+  color: #ff6b6b;
+}
+
+.terminal-line-success {
+  color: #69db7c;
+}
+
+.terminal-line-warning {
+  color: #ffd43b;
+}
+
+/* Status-Aktualisierungsbutton */
+.fa-spin {
+  animation: fa-spin 2s infinite linear;
+}
+
+@keyframes fa-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Verbesserte Statusanzeige */
+.server-status {
+  position: relative;
+  padding: 15px;
+}
+
+.server-status h4 {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+.server-status p {
+  margin-bottom: 0;
+}
+
+.status-indicator {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.status-indicator-running {
+  background-color: #28a745;
+  box-shadow: 0 0 8px #28a745;
+}
+
+.status-indicator-stopped {
+  background-color: #dc3545;
+  box-shadow: 0 0 8px #dc3545;
 } 
