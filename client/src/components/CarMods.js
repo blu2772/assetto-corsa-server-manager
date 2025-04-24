@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Card, Button, Form, Row, Col, ListGroup, Nav, Tab } from 'react-bootstrap';
+import React, { useState, useEffect, useRef } from 'react';
+import { Card, Button, Form, Row, Col, ListGroup, Nav, Tab, Alert, Container, Spinner } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import { FaUpload, FaCar } from 'react-icons/fa';
 import { carModsApi } from '../services/api';
@@ -9,8 +9,13 @@ const CarMods = () => {
   const [stockCars, setStockCars] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
+  const [uploadError, setUploadError] = useState(null);
+  const [uploadSuccess, setUploadSuccess] = useState(null);
+  const [uploadWarning, setUploadWarning] = useState(null);
+  const [uploadMessage, setUploadMessage] = useState('');
+  const fileInputRef = useRef(null);
   
   useEffect(() => {
     fetchCars();
@@ -48,24 +53,49 @@ const CarMods = () => {
   
   const handleUpload = async (e) => {
     e.preventDefault();
+    const file = e.target.carmod.files[0];
     
-    if (!selectedFile) {
-      toast.error('Bitte wählen Sie eine Datei aus');
+    if (!file) {
+      setUploadError('Bitte wählen Sie eine Datei aus');
       return;
     }
     
+    // Zurücksetzen der Statusmeldungen
+    setUploadError(null);
+    setUploadSuccess(null);
+    setUploadWarning(null);
+    setUploadMessage('');
+    
+    const formData = new FormData();
+    formData.append('carmod', file);
+    
+    setUploading(true);
+    
     try {
-      setUploading(true);
-      await carModsApi.uploadCar(selectedFile);
-      toast.success('Fahrzeug-Mod erfolgreich hochgeladen');
-      setSelectedFile(null);
-      // Formular zurücksetzen
-      e.target.reset();
-      // Fahrzeugliste aktualisieren
-      fetchCars();
+      const response = await carModsApi.uploadCar(file);
+      
+      if (response.error) {
+        setUploadError(response.error);
+      } else {
+        if (response.warning) {
+          setUploadWarning(response.warning);
+          setUploadMessage(response.message || '');
+        } else {
+          setUploadSuccess(`Datei "${response.filename}" wurde erfolgreich hochgeladen`);
+        }
+        
+        // Wenn die Datei erfolgreich extrahiert wurde, aktualisieren wir die Liste
+        if (response.extracted) {
+          fetchCars();
+        }
+      }
+      
+      // Zurücksetzen des Datei-Inputs
+      if (fileInputRef.current) {
+        fileInputRef.current.value = null;
+      }
     } catch (error) {
-      console.error('Fehler beim Hochladen des Fahrzeug-Mods:', error);
-      toast.error('Fehler beim Hochladen des Fahrzeug-Mods');
+      setUploadError(`Fehler beim Hochladen: ${error.message}`);
     } finally {
       setUploading(false);
     }
@@ -109,99 +139,95 @@ const CarMods = () => {
   const allCars = [...cars, ...stockCars];
   
   return (
-    <div>
-      <h1 className="mb-4">Fahrzeug-Mods</h1>
+    <Container>
+      <h2>Car Mods</h2>
       
-      <Row>
-        <Col md={6}>
-          <Card className="mb-4">
-            <Card.Header>
-              <FaUpload className="me-2" /> Fahrzeug-Mod hochladen
-            </Card.Header>
-            <Card.Body>
-              <Form onSubmit={handleUpload}>
-                <Form.Group className="mb-3">
-                  <div className={`file-upload-wrapper ${selectedFile ? 'file-selected' : ''}`}>
-                    <Form.Control 
-                      type="file" 
-                      onChange={handleFileChange}
-                      className="file-upload-input"
-                      accept=".zip,.rar,.7z,.tar.gz"
-                    />
-                    <div className="file-upload-button">
-                      {selectedFile 
-                        ? `Ausgewählt: ${selectedFile.name}` 
-                        : 'Klicken Sie hier, um eine Fahrzeug-Mod-Datei auszuwählen (.zip)'}
-                    </div>
-                  </div>
-                  <Form.Text className="text-muted">
-                    Unterstützte Formate: ZIP, RAR, 7Z, TAR.GZ
-                  </Form.Text>
-                </Form.Group>
-                
-                <Button 
-                  variant="primary" 
-                  type="submit" 
-                  disabled={!selectedFile || uploading}
-                >
-                  {uploading ? 'Wird hochgeladen...' : 'Hochladen'}
-                </Button>
-              </Form>
-              
-              <div className="mt-3">
-                <h5>Hinweise:</h5>
-                <ul>
-                  <li>Fahrzeug-Mods sollten im richtigen Format für Assetto Corsa vorliegen</li>
-                  <li>Die Datei sollte den Ordner des Fahrzeugs enthalten</li>
-                  <li>Große Dateien können einige Zeit zum Hochladen benötigen</li>
-                </ul>
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
+      <Form onSubmit={handleUpload} className="mb-4">
+        <Row>
+          <Col md={6}>
+            <Form.Group className="mb-3">
+              <Form.Label>Car Mod hochladen (ZIP-Format empfohlen)</Form.Label>
+              <Form.Control 
+                type="file" 
+                name="carmod"
+                ref={fileInputRef}
+                accept=".zip,.rar,.7z,.tar.gz" 
+              />
+              <Form.Text className="text-muted">
+                Nur ZIP-Dateien werden automatisch entpackt. Andere Formate müssen manuell behandelt werden.
+              </Form.Text>
+            </Form.Group>
+          </Col>
+          <Col md={6} className="d-flex align-items-end">
+            <Button 
+              variant="primary" 
+              type="submit" 
+              disabled={uploading}
+            >
+              {uploading ? (
+                <>
+                  <Spinner
+                    as="span"
+                    animation="border"
+                    size="sm"
+                    role="status"
+                    aria-hidden="true"
+                  />
+                  {' '}Hochladen...
+                </>
+              ) : (
+                'Hochladen'
+              )}
+            </Button>
+          </Col>
+        </Row>
+      </Form>
+      
+      {uploadSuccess && (
+        <Alert variant="success" onClose={() => setUploadSuccess(null)} dismissible>
+          {uploadSuccess}
+        </Alert>
+      )}
+      
+      {uploadWarning && (
+        <Alert variant="warning" onClose={() => setUploadWarning(null)} dismissible>
+          <Alert.Heading>{uploadWarning}</Alert.Heading>
+          <p>{uploadMessage}</p>
+        </Alert>
+      )}
+      
+      {uploadError && (
+        <Alert variant="danger" onClose={() => setUploadError(null)} dismissible>
+          {uploadError}
+        </Alert>
+      )}
+      
+      <Tab.Container activeKey={activeTab} onSelect={(k) => setActiveTab(k)}>
+        <Nav variant="tabs" className="mb-3">
+          <Nav.Item>
+            <Nav.Link eventKey="all">Alle Autos</Nav.Link>
+          </Nav.Item>
+          <Nav.Item>
+            <Nav.Link eventKey="mods">Mods</Nav.Link>
+          </Nav.Item>
+          <Nav.Item>
+            <Nav.Link eventKey="stock">Standard-Autos</Nav.Link>
+          </Nav.Item>
+        </Nav>
         
-        <Col md={6}>
-          <Card>
-            <Card.Header>
-              <FaCar className="me-2" /> Verfügbare Fahrzeuge
-            </Card.Header>
-            <Card.Body>
-              <Tab.Container id="car-tabs" activeKey={activeTab} onSelect={setActiveTab}>
-                <Nav variant="tabs" className="mb-3">
-                  <Nav.Item>
-                    <Nav.Link eventKey="all">
-                      Alle ({allCars.length})
-                    </Nav.Link>
-                  </Nav.Item>
-                  <Nav.Item>
-                    <Nav.Link eventKey="mods">
-                      Mods ({cars.length})
-                    </Nav.Link>
-                  </Nav.Item>
-                  <Nav.Item>
-                    <Nav.Link eventKey="stock">
-                      Standard ({stockCars.length})
-                    </Nav.Link>
-                  </Nav.Item>
-                </Nav>
-                
-                <Tab.Content>
-                  <Tab.Pane eventKey="all">
-                    {renderCarList(allCars)}
-                  </Tab.Pane>
-                  <Tab.Pane eventKey="mods">
-                    {renderCarList(cars)}
-                  </Tab.Pane>
-                  <Tab.Pane eventKey="stock">
-                    {renderCarList(stockCars, true)}
-                  </Tab.Pane>
-                </Tab.Content>
-              </Tab.Container>
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
-    </div>
+        <Tab.Content>
+          <Tab.Pane eventKey="all">
+            {renderCarList(allCars)}
+          </Tab.Pane>
+          <Tab.Pane eventKey="mods">
+            {renderCarList(cars)}
+          </Tab.Pane>
+          <Tab.Pane eventKey="stock">
+            {renderCarList(stockCars)}
+          </Tab.Pane>
+        </Tab.Content>
+      </Tab.Container>
+    </Container>
   );
 };
 
