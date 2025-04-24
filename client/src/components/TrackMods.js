@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Form, Row, Col, ListGroup, Badge } from 'react-bootstrap';
+import { Card, Button, Form, Row, Col, ListGroup, Badge, Nav, Tab } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import { FaUpload, FaRoad } from 'react-icons/fa';
 import { trackModsApi } from '../services/api';
 
 const TrackMods = () => {
   const [tracks, setTracks] = useState([]);
+  const [stockTracks, setStockTracks] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('all');
   
   useEffect(() => {
     fetchTracks();
+    fetchStockTracks();
   }, []);
   
   const fetchTracks = async () => {
@@ -24,6 +27,16 @@ const TrackMods = () => {
       toast.error('Fehler beim Laden der Strecken');
     } finally {
       setLoading(false);
+    }
+  };
+  
+  const fetchStockTracks = async () => {
+    try {
+      const stockTracksData = await trackModsApi.getStockTracks();
+      setStockTracks(stockTracksData);
+    } catch (error) {
+      console.error('Fehler beim Laden der Standard-Strecken:', error);
+      toast.error('Fehler beim Laden der Standard-Strecken. Bitte konfigurieren Sie den Assetto Corsa Pfad.');
     }
   };
   
@@ -57,6 +70,60 @@ const TrackMods = () => {
       setUploading(false);
     }
   };
+  
+  const renderTrackList = (trackList, isStock = false) => {
+    if (loading && !isStock) {
+      return <p>Strecken werden geladen...</p>;
+    }
+    
+    if (trackList.length === 0) {
+      return (
+        <p>
+          {isStock 
+            ? 'Keine Standard-Strecken gefunden. Bitte konfigurieren Sie den Assetto Corsa Pfad.'
+            : 'Keine Strecken-Mods gefunden. Laden Sie Mods hoch, um zu beginnen.'}
+        </p>
+      );
+    }
+    
+    return (
+      <div className="mod-list">
+        <ListGroup>
+          {trackList.map((track, index) => (
+            <ListGroup.Item key={index} className="mod-item">
+              <div className="d-flex justify-content-between align-items-center">
+                <div>
+                  <FaRoad className={`me-2 ${isStock ? 'text-success' : 'text-primary'}`} />
+                  <span className="fw-bold">{track.name}</span>
+                  {isStock && <small className="ms-2 text-muted">(Standard)</small>}
+                  
+                  {track.layouts && track.layouts.length > 0 && (
+                    <div className="mt-2">
+                      <small className="text-muted">Verfügbare Layouts:</small>
+                      <div className="mt-1">
+                        {track.layouts.map((layout, idx) => (
+                          <Badge 
+                            key={idx} 
+                            bg="secondary" 
+                            className="me-1"
+                          >
+                            {layout || 'Default'}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </ListGroup.Item>
+          ))}
+        </ListGroup>
+      </div>
+    );
+  };
+  
+  // Kombiniere alle Strecken für die "Alle"-Ansicht
+  const allTracks = [...tracks, ...stockTracks];
   
   return (
     <div>
@@ -113,46 +180,40 @@ const TrackMods = () => {
         <Col md={6}>
           <Card>
             <Card.Header>
-              <FaRoad className="me-2" /> Verfügbare Strecken-Mods ({tracks.length})
+              <FaRoad className="me-2" /> Verfügbare Strecken
             </Card.Header>
             <Card.Body>
-              {loading ? (
-                <p>Strecken werden geladen...</p>
-              ) : tracks.length === 0 ? (
-                <p>Keine Strecken-Mods gefunden. Laden Sie Mods hoch, um zu beginnen.</p>
-              ) : (
-                <div className="mod-list">
-                  <ListGroup>
-                    {tracks.map((track, index) => (
-                      <ListGroup.Item key={index} className="mod-item">
-                        <div className="d-flex justify-content-between align-items-center">
-                          <div>
-                            <FaRoad className="me-2 text-success" />
-                            <span className="fw-bold">{track.name}</span>
-                            
-                            {track.layouts && track.layouts.length > 0 && (
-                              <div className="mt-2">
-                                <small className="text-muted">Verfügbare Layouts:</small>
-                                <div className="mt-1">
-                                  {track.layouts.map((layout, idx) => (
-                                    <Badge 
-                                      key={idx} 
-                                      bg="secondary" 
-                                      className="me-1"
-                                    >
-                                      {layout || 'Default'}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </ListGroup.Item>
-                    ))}
-                  </ListGroup>
-                </div>
-              )}
+              <Tab.Container id="track-tabs" activeKey={activeTab} onSelect={setActiveTab}>
+                <Nav variant="tabs" className="mb-3">
+                  <Nav.Item>
+                    <Nav.Link eventKey="all">
+                      Alle ({allTracks.length})
+                    </Nav.Link>
+                  </Nav.Item>
+                  <Nav.Item>
+                    <Nav.Link eventKey="mods">
+                      Mods ({tracks.length})
+                    </Nav.Link>
+                  </Nav.Item>
+                  <Nav.Item>
+                    <Nav.Link eventKey="stock">
+                      Standard ({stockTracks.length})
+                    </Nav.Link>
+                  </Nav.Item>
+                </Nav>
+                
+                <Tab.Content>
+                  <Tab.Pane eventKey="all">
+                    {renderTrackList(allTracks)}
+                  </Tab.Pane>
+                  <Tab.Pane eventKey="mods">
+                    {renderTrackList(tracks)}
+                  </Tab.Pane>
+                  <Tab.Pane eventKey="stock">
+                    {renderTrackList(stockTracks, true)}
+                  </Tab.Pane>
+                </Tab.Content>
+              </Tab.Container>
             </Card.Body>
           </Card>
         </Col>
