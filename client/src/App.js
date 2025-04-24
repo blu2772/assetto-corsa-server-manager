@@ -13,23 +13,31 @@ import ServerSettings from './components/ServerSettings';
 
 function App() {
   const [serverStatus, setServerStatus] = useState({ running: false });
+  const [statusLoading, setStatusLoading] = useState(false);
   const location = useLocation();
   
   useEffect(() => {
-    // Serverstatus beim Start und alle 10 Sekunden aktualisieren
+    // Serverstatus beim Start und alle 5 Sekunden aktualisieren
     fetchServerStatus();
-    const interval = setInterval(fetchServerStatus, 10000);
+    const interval = setInterval(fetchServerStatus, 5000);
     
     return () => clearInterval(interval);
   }, []);
   
   const fetchServerStatus = async () => {
     try {
+      setStatusLoading(true);
       const status = await serverApi.getStatus();
       setServerStatus(status);
     } catch (error) {
       console.error('Fehler beim Abrufen des Serverstatus:', error);
+    } finally {
+      setStatusLoading(false);
     }
+  };
+  
+  const updateServerStatus = () => {
+    fetchServerStatus();
   };
   
   return (
@@ -79,7 +87,8 @@ function App() {
             <Navbar.Text>
               Server Status: 
               <span className={serverStatus.running ? "text-success ms-2" : "text-danger ms-2"}>
-                {serverStatus.running ? "Läuft" : "Gestoppt"}
+                <span className={`status-indicator ${serverStatus.running ? 'status-indicator-running' : 'status-indicator-stopped'}`}></span>
+                {statusLoading ? 'Prüfe...' : serverStatus.running ? "Läuft" : "Gestoppt"}
               </span>
             </Navbar.Text>
           </Navbar.Collapse>
@@ -93,7 +102,7 @@ function App() {
             element={
               <Dashboard 
                 serverStatus={serverStatus} 
-                onStatusChange={fetchServerStatus} 
+                onStatusChange={updateServerStatus} 
               />
             } 
           />
