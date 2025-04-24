@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Form, Button, Row, Col, Alert, Badge } from 'react-bootstrap';
 import { toast } from 'react-toastify';
-import { FaSave, FaPlay, FaStop, FaCog } from 'react-icons/fa';
+import { FaSave, FaPlay, FaStop, FaCog, FaSync } from 'react-icons/fa';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
 import { serverApi, carModsApi, trackModsApi } from '../services/api';
@@ -100,10 +100,10 @@ const ServerConfig = () => {
       setLoading(true);
       await serverApi.startServer(values);
       toast.success('Server erfolgreich gestartet');
-      await fetchServerStatus();
+      await fetchServerStatus();  // Wichtig: Status sofort aktualisieren
     } catch (error) {
       console.error('Fehler beim Starten des Servers:', error);
-      toast.error('Fehler beim Starten des Servers');
+      toast.error('Fehler beim Starten des Servers: ' + (error.response?.data?.error || error.message));
     } finally {
       setLoading(false);
     }
@@ -114,10 +114,10 @@ const ServerConfig = () => {
       setLoading(true);
       await serverApi.stopServer();
       toast.success('Server erfolgreich gestoppt');
-      await fetchServerStatus();
+      await fetchServerStatus();  // Wichtig: Status sofort aktualisieren
     } catch (error) {
       console.error('Fehler beim Stoppen des Servers:', error);
-      toast.error('Fehler beim Stoppen des Servers');
+      toast.error('Fehler beim Stoppen des Servers: ' + (error.response?.data?.error || error.message));
     } finally {
       setLoading(false);
     }
@@ -140,9 +140,19 @@ const ServerConfig = () => {
       <h1 className="mb-4">Serverkonfiguration</h1>
       
       <div className={`server-status ${serverStatus.running ? 'server-status-running' : 'server-status-stopped'}`}>
-        <h4>
-          {serverStatus.running ? 'Server läuft' : 'Server ist gestoppt'}
-        </h4>
+        <div className="d-flex justify-content-between align-items-center">
+          <h4>
+            {serverStatus.running ? 'Server läuft' : 'Server ist gestoppt'}
+          </h4>
+          <Button 
+            variant="outline-primary" 
+            size="sm" 
+            onClick={fetchServerStatus}
+            disabled={loading}
+          >
+            <FaSync className={loading ? "fa-spin" : ""} /> Status aktualisieren
+          </Button>
+        </div>
         <p>
           {serverStatus.running 
             ? 'Der Assetto Corsa Server ist aktiv und Spieler können beitreten.' 
