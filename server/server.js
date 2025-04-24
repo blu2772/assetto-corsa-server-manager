@@ -3,7 +3,7 @@ const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs-extra');
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
 const unzipper = require('unzipper');
 const ini = require('ini');
 
@@ -200,6 +200,10 @@ let acServerPath = '/pfad/zu/acServer'; // Anpassen nach tatsächlichem Pfad
 // Aktuelle Serverprozess-ID
 let serverProcess = null;
 
+// Serverausgabe speichern
+let serverOutput = [];
+const MAX_OUTPUT_LINES = 1000;
+
 // API-Endpunkte
 
 // Abrufen der verfügbaren Assetto Corsa Standard-Autos
@@ -388,7 +392,15 @@ app.get('/api/all-tracks', async (req, res) => {
 // Serverstatus abrufen
 app.get('/api/server/status', (req, res) => {
   const isRunning = serverProcess !== null;
-  res.json({ running: isRunning });
+  res.json({ 
+    running: isRunning,
+    outputCount: serverOutput.length
+  });
+});
+
+// Serverausgabe abrufen
+app.get('/api/server/output', (req, res) => {
+  res.json({ output: serverOutput });
 });
 
 // Serverkonfiguration aktualisieren
@@ -442,23 +454,86 @@ app.post('/api/server/start', (req, res) => {
       saveServerConfig();
     }
     
-    // Server starten
-    serverProcess = exec(`${acServerPath}`, (error) => {
-      if (error) {
-        console.error('Fehler beim Starten des Servers:', error);
-        serverProcess = null;
-      }
+    // Serverausgabe zurücksetzen
+    serverOutput = [];
+    
+    // Protokolliere Start-Informationen
+    const timestamp = new Date().toISOString();
+    serverOutput.push(`[${timestamp}] Starting Assetto Corsa Server...`);
+    serverOutput.push(`[${timestamp}] Server path: ${acServerPath}`);
+    serverOutput.push(`[${timestamp}] Server configuration: ${JSON.stringify(acServerConfig, null, 2)}`);
+    
+    // Server als spawn statt exec starten, um Ausgabe zu erfassen
+    const options = {
+      cwd: path.dirname(acServerPath),
+      shell: true
+    };
+    
+    serverProcess = spawn(acServerPath, [], options);
+    
+    if (!serverProcess) {
+      throw new Error('Server konnte nicht gestartet werden');
+    }
+    
+    // Ausgabe vom Server erfassen
+    serverProcess.stdout.on('data', (data) => {
+      const timestamp = new Date().toISOString();
+      const lines = data.toString().split('\n').filter(line => line.trim() !== '');
+      
+      lines.forEach(line => {
+        serverOutput.push(`[${timestamp}] ${line}`);
+        // Begrenze die Anzahl der gespeicherten Zeilen
+        if (serverOutput.length > MAX_OUTPUT_LINES) {
+          serverOutput.shift();
+        }
+      });
+      
+      console.log(`Server stdout: ${data}`);
     });
     
-    serverProcess.on('exit', () => {
-      console.log('Assetto Corsa Server beendet');
+    // Fehlerausgabe vom Server erfassen
+    serverProcess.stderr.on('data', (data) => {
+      const timestamp = new Date().toISOString();
+      const lines = data.toString().split('\n').filter(line => line.trim() !== '');
+      
+      lines.forEach(line => {
+        serverOutput.push(`[${timestamp}] ERROR: ${line}`);
+        // Begrenze die Anzahl der gespeicherten Zeilen
+        if (serverOutput.length > MAX_OUTPUT_LINES) {
+          serverOutput.shift();
+        }
+      });
+      
+      console.error(`Server stderr: ${data}`);
+    });
+    
+    // Ereignisse vom Server überwachen
+    serverProcess.on('error', (error) => {
+      const timestamp = new Date().toISOString();
+      serverOutput.push(`[${timestamp}] ERROR: ${error.message}`);
+      console.error('Server process error:', error);
       serverProcess = null;
     });
     
-    res.json({ message: 'Assetto Corsa Server gestartet' });
+    serverProcess.on('exit', (code, signal) => {
+      const timestamp = new Date().toISOString();
+      serverOutput.push(`[${timestamp}] Assetto Corsa Server beendet mit Code ${code}, Signal: ${signal}`);
+      console.log(`Server exited with code ${code} and signal ${signal}`);
+      serverProcess = null;
+    });
+    
+    // Protokolliere erfolgreichen Start
+    serverOutput.push(`[${timestamp}] Assetto Corsa Server erfolgreich gestartet mit PID ${serverProcess.pid}`);
+    
+    res.json({ 
+      message: 'Assetto Corsa Server gestartet',
+      pid: serverProcess.pid
+    });
   } catch (error) {
     console.error('Fehler beim Starten des Servers:', error);
-    res.status(500).json({ error: 'Fehler beim Starten des Servers' });
+    const timestamp = new Date().toISOString();
+    serverOutput.push(`[${timestamp}] FEHLER BEIM STARTEN: ${error.message}`);
+    res.status(500).json({ error: 'Fehler beim Starten des Servers: ' + error.message });
   }
 });
 
@@ -469,13 +544,26 @@ app.post('/api/server/stop', (req, res) => {
   }
   
   try {
+    const timestamp = new Date().toISOString();
+    serverOutput.push(`[${timestamp}] Stoppe Assetto Corsa Server...`);
+    
     // Serverneustart SIGTERM-Signal senden
     serverProcess.kill('SIGTERM');
-    serverProcess = null;
     
+    // Optional: Warte kurz und töte den Prozess gewaltsam, falls er nicht reagiert
+    setTimeout(() => {
+      if (serverProcess) {
+        serverProcess.kill('SIGKILL');
+        serverProcess = null;
+      }
+    }, 5000);
+    
+    serverOutput.push(`[${timestamp}] Assetto Corsa Server gestoppt`);
     res.json({ message: 'Assetto Corsa Server gestoppt' });
   } catch (error) {
     console.error('Fehler beim Stoppen des Servers:', error);
+    const timestamp = new Date().toISOString();
+    serverOutput.push(`[${timestamp}] FEHLER BEIM STOPPEN: ${error.message}`);
     res.status(500).json({ error: 'Fehler beim Stoppen des Servers' });
   }
 });
