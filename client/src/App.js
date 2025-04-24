@@ -9,7 +9,7 @@ import Dashboard from './components/Dashboard';
 import CarMods from './components/CarMods';
 import TrackMods from './components/TrackMods';
 import ServerConfig from './components/ServerConfig';
-import ACConfig from './components/ACConfig';
+import ServerSettings from './components/ServerSettings';
 
 function App() {
   const [serverStatus, setServerStatus] = useState({ running: false });
@@ -70,10 +70,10 @@ function App() {
               </Nav.Link>
               <Nav.Link 
                 as={Link} 
-                to="/ac-config" 
-                active={location.pathname === '/ac-config'}
+                to="/server-settings" 
+                active={location.pathname === '/server-settings'}
               >
-                AC-Konfiguration
+                Server-Einstellungen
               </Nav.Link>
             </Nav>
             <Navbar.Text>
@@ -100,7 +100,7 @@ function App() {
           <Route path="/cars" element={<CarMods />} />
           <Route path="/tracks" element={<TrackMods />} />
           <Route path="/config" element={<ServerConfig />} />
-          <Route path="/ac-config" element={<ACConfig />} />
+          <Route path="/server-settings" element={<ServerSettings />} />
         </Routes>
       </Container>
       
