@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Card, Button, Form, Row, Col, ListGroup, Badge, Nav, Tab } from 'react-bootstrap';
+import React, { useState, useEffect, useRef } from 'react';
+import { Card, Button, Form, Row, Col, ListGroup, Badge, Nav, Tab, Alert, Container, Spinner } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import { FaUpload, FaRoad } from 'react-icons/fa';
 import { trackModsApi } from '../services/api';
@@ -7,10 +7,15 @@ import { trackModsApi } from '../services/api';
 const TrackMods = () => {
   const [tracks, setTracks] = useState([]);
   const [stockTracks, setStockTracks] = useState([]);
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [uploading, setUploading] = useState(false);
+  const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [uploadError, setUploadError] = useState(null);
+  const [uploadSuccess, setUploadSuccess] = useState(null);
+  const [uploadWarning, setUploadWarning] = useState(null);
   const [activeTab, setActiveTab] = useState('all');
+  const fileInputRef = useRef(null);
   
   useEffect(() => {
     fetchTracks();
@@ -18,13 +23,12 @@ const TrackMods = () => {
   }, []);
   
   const fetchTracks = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const tracksData = await trackModsApi.getAllTracks();
-      setTracks(tracksData);
+      const data = await trackModsApi.getAllTracks();
+      setTracks(data);
     } catch (error) {
-      console.error('Fehler beim Laden der Strecken:', error);
-      toast.error('Fehler beim Laden der Strecken');
+      setError('Fehler beim Laden der Strecken-Mods: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -32,185 +36,202 @@ const TrackMods = () => {
   
   const fetchStockTracks = async () => {
     try {
-      const stockTracksData = await trackModsApi.getStockTracks();
-      setStockTracks(stockTracksData);
+      const data = await trackModsApi.getStockTracks();
+      setStockTracks(data);
     } catch (error) {
       console.error('Fehler beim Laden der Standard-Strecken:', error);
-      toast.error('Fehler beim Laden der Standard-Strecken. Bitte konfigurieren Sie den Assetto Corsa Pfad.');
-    }
-  };
-  
-  const handleFileChange = (e) => {
-    if (e.target.files.length > 0) {
-      setSelectedFile(e.target.files[0]);
+      // Wir setzen keinen Fehler, da dies eine optionale Funktion ist
     }
   };
   
   const handleUpload = async (e) => {
     e.preventDefault();
     
-    if (!selectedFile) {
-      toast.error('Bitte wählen Sie eine Datei aus');
+    // Zurücksetzen des Upload-Status
+    setUploadError(null);
+    setUploadSuccess(null);
+    setUploadWarning(null);
+    
+    if (!file) {
+      setUploadError('Bitte wählen Sie eine Datei aus');
       return;
     }
+
+    // Prüfen des Dateiformats
+    const fileExt = file.name.split('.').pop().toLowerCase();
+    if (fileExt !== 'zip') {
+      setUploadWarning('Hinweis: Nur ZIP-Dateien werden automatisch entpackt. Sie müssen andere Formate manuell entpacken.');
+    }
+
+    setUploadLoading(true);
     
     try {
-      setUploading(true);
-      await trackModsApi.uploadTrack(selectedFile);
-      toast.success('Strecken-Mod erfolgreich hochgeladen');
-      setSelectedFile(null);
-      // Formular zurücksetzen
-      e.target.reset();
-      // Streckenliste aktualisieren
-      fetchTracks();
+      const formData = new FormData();
+      formData.append('trackmod', file);
+      
+      const response = await trackModsApi.uploadTrack(formData);
+      
+      if (response.warning) {
+        setUploadWarning(response.message || response.warning);
+      } else {
+        setUploadSuccess('Strecken-Mod erfolgreich hochgeladen' + 
+                        (response.extracted ? ' und entpackt' : ''));
+        // Strecken neu laden nach erfolgreichem Upload
+        fetchTracks();
+      }
+      
+      setFile(null);
+      // Form zurücksetzen
+      document.getElementById('track-upload-form').reset();
     } catch (error) {
-      console.error('Fehler beim Hochladen des Strecken-Mods:', error);
-      toast.error('Fehler beim Hochladen des Strecken-Mods');
+      setUploadError('Fehler beim Hochladen: ' + (error.response?.data?.error || error.message));
     } finally {
-      setUploading(false);
+      setUploadLoading(false);
     }
   };
   
-  const renderTrackList = (trackList, isStock = false) => {
-    if (loading && !isStock) {
-      return <p>Strecken werden geladen...</p>;
+  const renderTrackList = () => {
+    // Alle Strecken (Standard + Mods)
+    const allTracks = [...(stockTracks || []), ...(tracks || [])];
+    
+    // Die anzuzeigenden Strecken je nach Tab auswählen
+    let displayTracks = [];
+    
+    if (activeTab === 'all') {
+      displayTracks = allTracks;
+    } else if (activeTab === 'mods') {
+      displayTracks = tracks;
+    } else if (activeTab === 'stock') {
+      displayTracks = stockTracks;
     }
     
-    if (trackList.length === 0) {
-      return (
-        <p>
-          {isStock 
-            ? 'Keine Standard-Strecken gefunden. Bitte konfigurieren Sie den Assetto Corsa Pfad.'
-            : 'Keine Strecken-Mods gefunden. Laden Sie Mods hoch, um zu beginnen.'}
-        </p>
-      );
+    if (loading) {
+      return <Spinner animation="border" role="status"><span className="visually-hidden">Laden...</span></Spinner>;
+    }
+    
+    if (error) {
+      return <Alert variant="danger">{error}</Alert>;
+    }
+    
+    if (displayTracks.length === 0) {
+      if (activeTab === 'all') {
+        return <Alert variant="info">Keine Strecken gefunden</Alert>;
+      } else if (activeTab === 'mods') {
+        return <Alert variant="info">Keine Strecken-Mods gefunden</Alert>;
+      } else if (activeTab === 'stock') {
+        return <Alert variant="info">Keine Standard-Strecken gefunden</Alert>;
+      }
     }
     
     return (
-      <div className="mod-list">
-        <ListGroup>
-          {trackList.map((track, index) => (
-            <ListGroup.Item key={index} className="mod-item">
-              <div className="d-flex justify-content-between align-items-center">
-                <div>
-                  <FaRoad className={`me-2 ${isStock ? 'text-success' : 'text-primary'}`} />
-                  <span className="fw-bold">{track.name}</span>
-                  {isStock && <small className="ms-2 text-muted">(Standard)</small>}
-                  
-                  {track.layouts && track.layouts.length > 0 && (
-                    <div className="mt-2">
-                      <small className="text-muted">Verfügbare Layouts:</small>
-                      <div className="mt-1">
-                        {track.layouts.map((layout, idx) => (
-                          <Badge 
-                            key={idx} 
-                            bg="secondary" 
-                            className="me-1"
-                          >
-                            {layout || 'Default'}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </ListGroup.Item>
-          ))}
-        </ListGroup>
-      </div>
+      <ListGroup>
+        {displayTracks.map(track => (
+          <ListGroup.Item key={track.id} className="d-flex justify-content-between align-items-center">
+            <div>
+              <FaRoad className="me-2" />
+              {track.name}
+              {track.layouts && track.layouts.length > 0 && (
+                <small className="text-muted ms-2">
+                  ({track.layouts.length} Layout{track.layouts.length !== 1 ? 's' : ''})
+                </small>
+              )}
+            </div>
+            {track.isStock && <span className="badge bg-info">Standard</span>}
+          </ListGroup.Item>
+        ))}
+      </ListGroup>
     );
   };
   
-  // Kombiniere alle Strecken für die "Alle"-Ansicht
-  const allTracks = [...tracks, ...stockTracks];
-  
   return (
-    <div>
-      <h1 className="mb-4">Strecken-Mods</h1>
+    <Container className="my-4">
+      <h2>Strecken-Mods verwalten</h2>
       
-      <Row>
+      <Row className="mt-4">
         <Col md={6}>
-          <Card className="mb-4">
-            <Card.Header>
-              <FaUpload className="me-2" /> Strecken-Mod hochladen
-            </Card.Header>
+          <Card>
+            <Card.Header as="h5">Strecken-Mod hochladen</Card.Header>
             <Card.Body>
-              <Form onSubmit={handleUpload}>
-                <Form.Group className="mb-3">
-                  <div className={`file-upload-wrapper ${selectedFile ? 'file-selected' : ''}`}>
-                    <Form.Control 
-                      type="file" 
-                      onChange={handleFileChange}
-                      className="file-upload-input"
-                      accept=".zip,.rar,.7z,.tar.gz"
-                    />
-                    <div className="file-upload-button">
-                      {selectedFile 
-                        ? `Ausgewählt: ${selectedFile.name}` 
-                        : 'Klicken Sie hier, um eine Strecken-Mod-Datei auszuwählen (.zip)'}
-                    </div>
-                  </div>
+              <Form id="track-upload-form" onSubmit={handleUpload}>
+                <Form.Group controlId="trackmod">
+                  <Form.Label>Wählen Sie eine Mod-Datei aus (ZIP empfohlen)</Form.Label>
+                  <Form.Control 
+                    type="file" 
+                    onChange={(e) => setFile(e.target.files[0])} 
+                    required
+                  />
                   <Form.Text className="text-muted">
-                    Unterstützte Formate: ZIP, RAR, 7Z, TAR.GZ
+                    ZIP-Dateien werden automatisch entpackt. Andere Formate müssen manuell entpackt werden.
                   </Form.Text>
                 </Form.Group>
                 
+                {uploadSuccess && (
+                  <Alert variant="success" className="mt-3">
+                    {uploadSuccess}
+                  </Alert>
+                )}
+                
+                {uploadWarning && (
+                  <Alert variant="warning" className="mt-3">
+                    {uploadWarning}
+                  </Alert>
+                )}
+                
+                {uploadError && (
+                  <Alert variant="danger" className="mt-3">
+                    {uploadError}
+                  </Alert>
+                )}
+                
                 <Button 
-                  variant="success" 
+                  variant="primary" 
                   type="submit" 
-                  disabled={!selectedFile || uploading}
+                  className="mt-3"
+                  disabled={uploadLoading}
                 >
-                  {uploading ? 'Wird hochgeladen...' : 'Hochladen'}
+                  {uploadLoading ? (
+                    <>
+                      <Spinner
+                        as="span"
+                        animation="border"
+                        size="sm"
+                        role="status"
+                        aria-hidden="true"
+                        className="me-2"
+                      />
+                      Hochladen...
+                    </>
+                  ) : (
+                    <>
+                      <FaUpload className="me-2" />
+                      Hochladen
+                    </>
+                  )}
                 </Button>
               </Form>
-              
-              <div className="mt-3">
-                <h5>Hinweise:</h5>
-                <ul>
-                  <li>Strecken-Mods sollten im richtigen Format für Assetto Corsa vorliegen</li>
-                  <li>Die Datei sollte den Ordner der Strecke enthalten</li>
-                  <li>Große Dateien können einige Zeit zum Hochladen benötigen</li>
-                </ul>
-              </div>
             </Card.Body>
           </Card>
         </Col>
         
         <Col md={6}>
           <Card>
-            <Card.Header>
-              <FaRoad className="me-2" /> Verfügbare Strecken
-            </Card.Header>
+            <Card.Header as="h5">Verfügbare Strecken</Card.Header>
             <Card.Body>
-              <Tab.Container id="track-tabs" activeKey={activeTab} onSelect={setActiveTab}>
+              <Tab.Container activeKey={activeTab} onSelect={setActiveTab}>
                 <Nav variant="tabs" className="mb-3">
                   <Nav.Item>
-                    <Nav.Link eventKey="all">
-                      Alle ({allTracks.length})
-                    </Nav.Link>
+                    <Nav.Link eventKey="all">Alle</Nav.Link>
                   </Nav.Item>
                   <Nav.Item>
-                    <Nav.Link eventKey="mods">
-                      Mods ({tracks.length})
-                    </Nav.Link>
+                    <Nav.Link eventKey="mods">Mods</Nav.Link>
                   </Nav.Item>
                   <Nav.Item>
-                    <Nav.Link eventKey="stock">
-                      Standard ({stockTracks.length})
-                    </Nav.Link>
+                    <Nav.Link eventKey="stock">Standard</Nav.Link>
                   </Nav.Item>
                 </Nav>
-                
                 <Tab.Content>
-                  <Tab.Pane eventKey="all">
-                    {renderTrackList(allTracks)}
-                  </Tab.Pane>
-                  <Tab.Pane eventKey="mods">
-                    {renderTrackList(tracks)}
-                  </Tab.Pane>
-                  <Tab.Pane eventKey="stock">
-                    {renderTrackList(stockTracks, true)}
+                  <Tab.Pane eventKey={activeTab}>
+                    {renderTrackList()}
                   </Tab.Pane>
                 </Tab.Content>
               </Tab.Container>
@@ -218,7 +239,7 @@ const TrackMods = () => {
           </Card>
         </Col>
       </Row>
-    </div>
+    </Container>
   );
 };
 
