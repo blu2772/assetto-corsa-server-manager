@@ -602,7 +602,7 @@ app.get('/api/server/connect-info', (req, res) => {
       track: acServerConfig.track,
       trackLayout: acServerConfig.trackLayout,
       // Direktlink für Content Manager
-      contentManagerLink: `acmanager://${ipAddress}:${acServerConfig.port}`,
+      contentManagerLink: `acmanager:join?ip=${ipAddress}&port=${acServerConfig.port}`,
       // Direktlink für Browser
       directLink: `http://${ipAddress}:${acServerConfig.httpPort}`
     };
