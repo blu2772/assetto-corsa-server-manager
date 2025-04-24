@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Row, Col, Alert } from 'react-bootstrap';
+import { Card, Button, Row, Col, Alert, InputGroup, Form, Spinner } from 'react-bootstrap';
 import { toast } from 'react-toastify';
-import { FaPlay, FaStop, FaCar, FaRoad } from 'react-icons/fa';
+import { FaPlay, FaStop, FaCar, FaRoad, FaLink, FaCopy, FaGamepad, FaGlobe } from 'react-icons/fa';
 import { serverApi, carModsApi, trackModsApi } from '../services/api';
 import ServerTerminal from './ServerTerminal';
 
@@ -11,10 +11,20 @@ const Dashboard = ({ serverStatus, onStatusChange }) => {
     cars: 0,
     tracks: 0
   });
+  const [connectionInfo, setConnectionInfo] = useState(null);
+  const [loadingConnectionInfo, setLoadingConnectionInfo] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
   
   useEffect(() => {
     fetchStats();
+    fetchConnectionInfo();
   }, []);
+  
+  useEffect(() => {
+    if (serverStatus && serverStatus.running) {
+      fetchConnectionInfo();
+    }
+  }, [serverStatus]);
   
   const fetchStats = async () => {
     try {
@@ -33,12 +43,26 @@ const Dashboard = ({ serverStatus, onStatusChange }) => {
     }
   };
   
+  const fetchConnectionInfo = async () => {
+    try {
+      setLoadingConnectionInfo(true);
+      const info = await serverApi.getConnectionInfo();
+      setConnectionInfo(info);
+    } catch (error) {
+      console.error('Fehler beim Laden der Verbindungsinformationen:', error);
+      // Keine Toast-Nachricht hier, da es nicht kritisch ist
+    } finally {
+      setLoadingConnectionInfo(false);
+    }
+  };
+  
   const handleStartServer = async () => {
     try {
       setLoading(true);
       await serverApi.startServer();
       toast.success('Server erfolgreich gestartet');
       onStatusChange();
+      fetchConnectionInfo(); // Lade Verbindungsinformationen nach dem Serverstart
     } catch (error) {
       console.error('Fehler beim Starten des Servers:', error);
       toast.error('Fehler beim Starten des Servers');
@@ -67,6 +91,123 @@ const Dashboard = ({ serverStatus, onStatusChange }) => {
     }
   };
   
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text)
+      .then(() => {
+        setCopySuccess(true);
+        toast.success('Link in die Zwischenablage kopiert!');
+        setTimeout(() => setCopySuccess(false), 2000);
+      })
+      .catch(err => {
+        console.error('Fehler beim Kopieren in die Zwischenablage:', err);
+        toast.error('Fehler beim Kopieren in die Zwischenablage');
+      });
+  };
+  
+  // Komponente für Serververbindungsinformationen
+  const ServerConnectionCard = () => {
+    if (!serverStatus || !serverStatus.running) {
+      return (
+        <Card>
+          <Card.Header className="d-flex justify-content-between align-items-center">
+            <div><FaLink className="me-2" /> Server-Verbindung</div>
+          </Card.Header>
+          <Card.Body>
+            <Alert variant="info">
+              Starten Sie den Server, um einen Verbindungslink zu generieren.
+            </Alert>
+          </Card.Body>
+        </Card>
+      );
+    }
+    
+    if (loadingConnectionInfo || !connectionInfo) {
+      return (
+        <Card>
+          <Card.Header className="d-flex justify-content-between align-items-center">
+            <div><FaLink className="me-2" /> Server-Verbindung</div>
+          </Card.Header>
+          <Card.Body className="text-center">
+            <Spinner animation="border" role="status">
+              <span className="visually-hidden">Lade...</span>
+            </Spinner>
+            <p className="mt-2">Verbindungsinformationen werden geladen...</p>
+          </Card.Body>
+        </Card>
+      );
+    }
+    
+    return (
+      <Card>
+        <Card.Header className="d-flex justify-content-between align-items-center">
+          <div><FaLink className="me-2" /> Server-Verbindung</div>
+          <Button 
+            variant="outline-secondary" 
+            size="sm" 
+            onClick={fetchConnectionInfo}
+          >
+            Aktualisieren
+          </Button>
+        </Card.Header>
+        <Card.Body>
+          <Alert variant="success">
+            <strong>Server läuft!</strong> Nutzen Sie die folgenden Links, um sich zu verbinden:
+          </Alert>
+          
+          <h5><FaGamepad className="me-2" /> Assetto Corsa Content Manager</h5>
+          <InputGroup className="mb-3">
+            <Form.Control
+              value={connectionInfo.contentManagerLink}
+              readOnly
+            />
+            <Button 
+              variant="outline-primary" 
+              onClick={() => copyToClipboard(connectionInfo.contentManagerLink)}
+            >
+              <FaCopy className="me-2" /> Kopieren
+            </Button>
+            <Button 
+              variant="primary" 
+              as="a" 
+              href={connectionInfo.contentManagerLink}
+            >
+              Öffnen
+            </Button>
+          </InputGroup>
+          
+          <h5><FaGlobe className="me-2" /> Direkte HTTP-Verbindung</h5>
+          <InputGroup className="mb-3">
+            <Form.Control
+              value={connectionInfo.directLink}
+              readOnly
+            />
+            <Button 
+              variant="outline-primary" 
+              onClick={() => copyToClipboard(connectionInfo.directLink)}
+            >
+              <FaCopy className="me-2" /> Kopieren
+            </Button>
+            <Button 
+              variant="primary" 
+              as="a" 
+              href={connectionInfo.directLink}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Öffnen
+            </Button>
+          </InputGroup>
+          
+          <h5>Server-Informationen</h5>
+          <p><strong>Name:</strong> {connectionInfo.serverName}</p>
+          <p><strong>IP-Adresse:</strong> {connectionInfo.ipAddress}</p>
+          <p><strong>Port:</strong> {connectionInfo.port}</p>
+          <p><strong>HTTP-Port:</strong> {connectionInfo.httpPort}</p>
+        </Card.Body>
+      </Card>
+    );
+  };
+  
   return (
     <div>
       <h1 className="mb-4">Dashboard</h1>
@@ -78,7 +219,7 @@ const Dashboard = ({ serverStatus, onStatusChange }) => {
       
       <Row className="mt-4">
         <Col md={6}>
-          <Card>
+          <Card className="mb-4">
             <Card.Header>Verfügbare Mods</Card.Header>
             <Card.Body>
               <Row>
@@ -103,9 +244,7 @@ const Dashboard = ({ serverStatus, onStatusChange }) => {
               </Row>
             </Card.Body>
           </Card>
-        </Col>
-        
-        <Col md={6}>
+          
           <Card>
             <Card.Header>Schnellzugriff</Card.Header>
             <Card.Body>
@@ -144,6 +283,10 @@ const Dashboard = ({ serverStatus, onStatusChange }) => {
               </Row>
             </Card.Body>
           </Card>
+        </Col>
+        
+        <Col md={6}>
+          <ServerConnectionCard />
         </Col>
       </Row>
       
