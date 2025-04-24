@@ -208,6 +208,17 @@ export const serverApi = {
       console.error('Fehler beim Aktualisieren des Server-Pfads:', error);
       throw error;
     }
+  },
+  
+  // Verbindungsinformationen abrufen
+  getConnectionInfo: async () => {
+    try {
+      const response = await apiClient.get('/server/connect-info');
+      return response.data;
+    } catch (error) {
+      console.error('Fehler beim Abrufen der Verbindungsinformationen:', error);
+      throw error;
+    }
   }
 };
 
