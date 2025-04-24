@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Form, Button, Row, Col, Alert } from 'react-bootstrap';
+import { Card, Form, Button, Row, Col, Alert, Badge } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import { FaSave, FaPlay, FaStop, FaCog } from 'react-icons/fa';
 import { Formik } from 'formik';
@@ -24,9 +24,10 @@ const ServerConfig = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
+      // Alle Autos und Strecken abrufen (Mods und Standard)
       const [cars, tracks] = await Promise.all([
-        carModsApi.getAllCars(),
-        trackModsApi.getAllTracks()
+        carModsApi.getAllCarsAndStock(),
+        trackModsApi.getAllTracksAndStock()
       ]);
       
       setAvailableCars(cars);
@@ -34,6 +35,19 @@ const ServerConfig = () => {
     } catch (error) {
       console.error('Fehler beim Laden der Daten:', error);
       toast.error('Fehler beim Laden der Daten');
+      
+      // Versuchen, nur Mods zu laden, falls Standard-Content nicht verfügbar ist
+      try {
+        const [modCars, modTracks] = await Promise.all([
+          carModsApi.getAllCars(),
+          trackModsApi.getAllTracks()
+        ]);
+        
+        setAvailableCars(modCars);
+        setAvailableTracks(modTracks);
+      } catch (modError) {
+        console.error('Fehler beim Laden der Mods:', modError);
+      }
     } finally {
       setLoading(false);
     }
@@ -109,6 +123,18 @@ const ServerConfig = () => {
     }
   };
   
+  // Hilfsfunktion zum Extrahieren der Auto-ID
+  const getCarId = (car) => {
+    if (typeof car === 'string') return car;
+    return car.id || car.name;
+  };
+  
+  // Hilfsfunktion zum Extrahieren des Streckennamens
+  const getTrackName = (track) => {
+    if (typeof track === 'string') return track;
+    return track.name;
+  };
+  
   return (
     <div>
       <h1 className="mb-4">Serverkonfiguration</h1>
@@ -135,8 +161,8 @@ const ServerConfig = () => {
             <Formik
               initialValues={{
                 serverName: 'Mein Assetto Corsa Server',
-                cars: availableCars.length > 0 ? [availableCars[0]] : [],
-                track: availableTracks.length > 0 ? availableTracks[0]?.name : '',
+                cars: availableCars.length > 0 ? [getCarId(availableCars[0])] : [],
+                track: availableTracks.length > 0 ? getTrackName(availableTracks[0]) : '',
                 trackLayout: '',
                 maxClients: 15,
                 port: 9600,
@@ -181,29 +207,40 @@ const ServerConfig = () => {
                         <Form.Label>Verfügbare Fahrzeuge</Form.Label>
                         {availableCars.length === 0 ? (
                           <Alert variant="warning">
-                            Keine Fahrzeuge verfügbar. Bitte laden Sie zuerst Fahrzeug-Mods hoch.
+                            Keine Fahrzeuge verfügbar. Bitte laden Sie zuerst Fahrzeug-Mods hoch oder konfigurieren Sie den Assetto Corsa Pfad.
                           </Alert>
                         ) : (
                           <div className="mod-list" style={{ maxHeight: '150px', overflowY: 'auto' }}>
-                            {availableCars.map((car, index) => (
-                              <Form.Check
-                                key={index}
-                                type="checkbox"
-                                id={`car-${index}`}
-                                label={car}
-                                checked={values.cars.includes(car)}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setFieldValue('cars', [...values.cars, car]);
-                                  } else {
-                                    setFieldValue(
-                                      'cars',
-                                      values.cars.filter((c) => c !== car)
-                                    );
+                            {availableCars.map((car, index) => {
+                              const carId = getCarId(car);
+                              const isStock = car.isStock;
+                              const displayName = typeof car === 'string' ? car : car.name || car.id;
+                              
+                              return (
+                                <Form.Check
+                                  key={index}
+                                  type="checkbox"
+                                  id={`car-${index}`}
+                                  label={
+                                    <>
+                                      {displayName}
+                                      {isStock && <Badge bg="success" className="ms-2" pill>Standard</Badge>}
+                                    </>
                                   }
-                                }}
-                              />
-                            ))}
+                                  checked={values.cars.includes(carId)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setFieldValue('cars', [...values.cars, carId]);
+                                    } else {
+                                      setFieldValue(
+                                        'cars',
+                                        values.cars.filter((c) => c !== carId)
+                                      );
+                                    }
+                                  }}
+                                />
+                              );
+                            })}
                           </div>
                         )}
                         {touched.cars && errors.cars && (
@@ -215,7 +252,7 @@ const ServerConfig = () => {
                         <Form.Label>Strecke</Form.Label>
                         {availableTracks.length === 0 ? (
                           <Alert variant="warning">
-                            Keine Strecken verfügbar. Bitte laden Sie zuerst Strecken-Mods hoch.
+                            Keine Strecken verfügbar. Bitte laden Sie zuerst Strecken-Mods hoch oder konfigurieren Sie den Assetto Corsa Pfad.
                           </Alert>
                         ) : (
                           <Form.Select
@@ -226,11 +263,20 @@ const ServerConfig = () => {
                             isInvalid={touched.track && errors.track}
                           >
                             <option value="">Strecke auswählen</option>
-                            {availableTracks.map((track, index) => (
-                              <option key={index} value={track.name}>
-                                {track.name}
-                              </option>
-                            ))}
+                            <optgroup label="Standard-Strecken">
+                              {availableTracks.filter(track => track.isStock).map((track, index) => (
+                                <option key={`stock-${index}`} value={track.name}>
+                                  {track.name}
+                                </option>
+                              ))}
+                            </optgroup>
+                            <optgroup label="Strecken-Mods">
+                              {availableTracks.filter(track => !track.isStock).map((track, index) => (
+                                <option key={`mod-${index}`} value={track.name}>
+                                  {track.name}
+                                </option>
+                              ))}
+                            </optgroup>
                           </Form.Select>
                         )}
                         <Form.Control.Feedback type="invalid">
@@ -248,10 +294,10 @@ const ServerConfig = () => {
                         >
                           <option value="">Standard-Layout</option>
                           {availableTracks
-                            .find((track) => track.name === values.track)
+                            .find((track) => getTrackName(track) === values.track)
                             ?.layouts.map((layout, index) => (
                               <option key={index} value={layout}>
-                                {layout}
+                                {layout || 'Default'}
                               </option>
                             ))}
                         </Form.Select>
