@@ -155,6 +155,17 @@ export const serverApi = {
     }
   },
   
+  // Serverausgabe abrufen
+  getOutput: async () => {
+    try {
+      const response = await apiClient.get('/server/output');
+      return response.data;
+    } catch (error) {
+      console.error('Fehler beim Abrufen der Serverausgabe:', error);
+      throw error;
+    }
+  },
+  
   // Serverkonfiguration aktualisieren
   updateConfig: async (config) => {
     try {
