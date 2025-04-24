@@ -565,6 +565,55 @@ app.get('/api/server/output', (req, res) => {
   res.json({ output: serverOutput });
 });
 
+// Server-Verbindungsinformationen abrufen
+app.get('/api/server/connect-info', (req, res) => {
+  try {
+    // Hole die IP-Adresse des Servers
+    const networkInterfaces = require('os').networkInterfaces();
+    let ipAddress = '';
+    
+    // Durchsuche die Netzwerkschnittstellen nach einer geeigneten IP-Adresse
+    Object.keys(networkInterfaces).forEach((interfaceName) => {
+      const interfaces = networkInterfaces[interfaceName];
+      for (let i = 0; i < interfaces.length; i++) {
+        const iface = interfaces[i];
+        // Verwende IPv4-Adressen, die nicht localhost sind
+        if (iface.family === 'IPv4' && !iface.internal) {
+          ipAddress = iface.address;
+          break;
+        }
+      }
+    });
+    
+    // Wenn keine externe IP gefunden wurde, verwende localhost
+    if (!ipAddress) {
+      ipAddress = '127.0.0.1';
+    }
+    
+    // Generiere den Verbindungslink (Format für Content Manager: acmanager://?)
+    const connectionInfo = {
+      serverName: acServerConfig.serverName,
+      ipAddress: ipAddress,
+      port: acServerConfig.port,
+      httpPort: acServerConfig.httpPort,
+      password: acServerConfig.password,
+      running: serverProcess !== null,
+      cars: acServerConfig.cars,
+      track: acServerConfig.track,
+      trackLayout: acServerConfig.trackLayout,
+      // Direktlink für Content Manager
+      contentManagerLink: `acmanager://${ipAddress}:${acServerConfig.port}`,
+      // Direktlink für Browser
+      directLink: `http://${ipAddress}:${acServerConfig.httpPort}`
+    };
+    
+    res.json(connectionInfo);
+  } catch (error) {
+    console.error('Fehler beim Abrufen der Server-Verbindungsinformationen:', error);
+    res.status(500).json({ error: 'Fehler beim Abrufen der Server-Verbindungsinformationen' });
+  }
+});
+
 // Serverkonfiguration aktualisieren
 app.post('/api/server/config', (req, res) => {
   try {
