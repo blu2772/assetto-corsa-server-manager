@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+const API_URL = process.env.REACT_APP_API_URL || `${window.location.origin}/api`;
 
 // API Client mit Axios
 const apiClient = axios.create({
@@ -184,17 +184,6 @@ export const serverApi = {
       return response.data;
     } catch (error) {
       console.error('Fehler beim Stoppen des Servers:', error);
-      throw error;
-    }
-  },
-  
-  // AC-Konfiguration aktualisieren
-  updateACConfig: async (installPath) => {
-    try {
-      const response = await apiClient.post('/ac-config', { installPath });
-      return response.data;
-    } catch (error) {
-      console.error('Fehler beim Aktualisieren der AC-Konfiguration:', error);
       throw error;
     }
   },
