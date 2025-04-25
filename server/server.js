@@ -73,7 +73,9 @@ app.use(express.static(path.join(__dirname, '../client/build')));
 // Konfiguration für Datei-Uploads
 const carStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, 'uploads/cars'));
+    const tempUploadsDir = path.join(__dirname, 'temp_uploads/cars');
+    fs.ensureDirSync(tempUploadsDir);
+    cb(null, tempUploadsDir);
   },
   filename: (req, file, cb) => {
     cb(null, file.originalname);
@@ -82,7 +84,9 @@ const carStorage = multer.diskStorage({
 
 const trackStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, 'uploads/tracks'));
+    const tempUploadsDir = path.join(__dirname, 'temp_uploads/tracks');
+    fs.ensureDirSync(tempUploadsDir);
+    cb(null, tempUploadsDir);
   },
   filename: (req, file, cb) => {
     cb(null, file.originalname);
@@ -151,31 +155,86 @@ async function getStockTracksFromDisk() {
       .filter(track => fs.statSync(path.join(acConfig.tracksPath, track)).isDirectory())
       .map(async track => {
         const trackDir = path.join(acConfig.tracksPath, track);
-        const files = await fs.readdir(trackDir);
         
-        // Suche nach UI-Ordner und dann nach ui_track.json
-        const uiFolder = files.find(file => file.toLowerCase() === 'ui');
-        let layouts = [];
+        // Layouts identifizieren
+        let layouts = [""];  // Default Layout immer einschließen
         
-        if (uiFolder) {
-          const uiPath = path.join(trackDir, uiFolder);
-          try {
-            const uiFiles = await fs.readdir(uiPath);
-            const uiTrackFile = uiFiles.find(file => file.toLowerCase() === 'ui_track.json');
-            
-            if (uiTrackFile) {
-              const uiTrackData = await fs.readJson(path.join(uiPath, uiTrackFile));
-              layouts = uiTrackData.layouts || [];
-            }
-          } catch (error) {
-            console.error(`Fehler beim Lesen der Layouts für ${track}:`, error);
+        try {
+          // Methode 1: Überprüfen, ob ein "layouts" Verzeichnis existiert
+          const layoutsDir = path.join(trackDir, 'layouts');
+          if (fs.existsSync(layoutsDir) && fs.statSync(layoutsDir).isDirectory()) {
+            const layoutFolders = await fs.readdir(layoutsDir);
+            layouts = [...layouts, ...layoutFolders.filter(
+              layout => fs.statSync(path.join(layoutsDir, layout)).isDirectory()
+            )];
           }
+          
+          // Methode 2: Überprüfen, ob ui_track.json layouts enthält
+          const uiPath = path.join(trackDir, 'ui');
+          if (fs.existsSync(uiPath) && fs.statSync(uiPath).isDirectory()) {
+            try {
+              const uiFiles = await fs.readdir(uiPath);
+              const uiTrackFile = uiFiles.find(file => file.toLowerCase() === 'ui_track.json');
+              
+              if (uiTrackFile) {
+                const uiTrackData = JSON.parse(await fs.readFile(path.join(uiPath, uiTrackFile), 'utf8'));
+                if (uiTrackData.layouts && Array.isArray(uiTrackData.layouts)) {
+                  // Layouts aus der UI-Datei extrahieren
+                  const layoutNames = uiTrackData.layouts
+                    .filter(layout => layout && layout.name)
+                    .map(layout => layout.name);
+                  
+                  // Nur neue Layouts hinzufügen, die nicht bereits vorhanden sind
+                  layoutNames.forEach(name => {
+                    if (!layouts.includes(name)) {
+                      layouts.push(name);
+                    }
+                  });
+                }
+              }
+            } catch (error) {
+              console.error(`Fehler beim Lesen der ui_track.json für ${track}:`, error);
+            }
+          }
+          
+          // Zusätzliche Methode: Nach CONFIG_TRACK Optionen in data/surfaces.ini suchen
+          const dataDir = path.join(trackDir, 'data');
+          if (fs.existsSync(dataDir) && fs.statSync(dataDir).isDirectory()) {
+            const surfacesPath = path.join(dataDir, 'surfaces.ini');
+            if (fs.existsSync(surfacesPath)) {
+              try {
+                const surfacesContent = await fs.readFile(surfacesPath, 'utf8');
+                // Suche nach CONFIG_TRACK Optionen in der surfaces.ini
+                const configTrackMatches = surfacesContent.match(/CONFIG_TRACK=(\w+)/g);
+                if (configTrackMatches) {
+                  const configTracks = configTrackMatches.map(match => 
+                    match.replace('CONFIG_TRACK=', '')
+                  );
+                  
+                  // Nur neue Layouts hinzufügen
+                  configTracks.forEach(layout => {
+                    if (!layouts.includes(layout)) {
+                      layouts.push(layout);
+                    }
+                  });
+                }
+              } catch (error) {
+                console.error(`Fehler beim Lesen der surfaces.ini für ${track}:`, error);
+              }
+            }
+          }
+          
+          // Duplikate entfernen und leere Layouts filtern
+          layouts = [...new Set(layouts)].filter(layout => layout !== null && layout !== undefined);
+          
+        } catch (error) {
+          console.error(`Fehler beim Lesen der Layouts für ${track}:`, error);
         }
         
         return {
           id: track,
           name: track.replace(/_/g, ' '),
-          layouts: layouts.map(layout => layout.name || ''),
+          layouts: layouts,
           isStock: true
         };
       }));
@@ -287,16 +346,27 @@ app.post('/api/upload/car', uploadCar.single('carmod'), async (req, res) => {
     let extracted = false;
     let warning = null;
     
+    // Stellen Sie sicher, dass der Zielordner existiert
+    if (!acConfig.carsPath || !fs.existsSync(acConfig.carsPath)) {
+      return res.status(400).json({ 
+        error: 'Der Assetto Corsa cars-Pfad ist nicht konfiguriert oder existiert nicht',
+        details: `Pfad: ${acConfig.carsPath || 'nicht konfiguriert'}`
+      });
+    }
+    
     // Wenn es eine ZIP-Datei ist, entpacken
     if (fileExt === '.zip') {
       try {
+        // Direkt in das content/cars Verzeichnis des Servers entpacken
         await fs.createReadStream(filePath)
-          .pipe(unzipper.Extract({ path: path.join(__dirname, 'uploads/cars') }))
+          .pipe(unzipper.Extract({ path: acConfig.carsPath }))
           .promise();
         
         // ZIP-Datei nach dem Entpacken löschen
         await fs.unlink(filePath);
         extracted = true;
+        
+        console.log(`Car-Mod ${req.file.originalname} erfolgreich entpackt nach ${acConfig.carsPath}`);
       } catch (error) {
         console.error('Fehler beim Entpacken der ZIP-Datei:', error);
         return res.status(500).json({ 
@@ -307,7 +377,7 @@ app.post('/api/upload/car', uploadCar.single('carmod'), async (req, res) => {
     } else {
       warning = 'Nicht-ZIP-Datei hochgeladen';
       const message = 'Die Datei wurde hochgeladen, aber nicht automatisch entpackt. ' + 
-                     'Bitte entpacken Sie die Datei manuell im cars-Verzeichnis und starten Sie den Server neu.';
+                     'Bitte entpacken Sie die Datei manuell im content/cars-Verzeichnis und starten Sie den Server neu.';
       return res.json({ 
         message: message, 
         warning: warning, 
@@ -317,9 +387,10 @@ app.post('/api/upload/car', uploadCar.single('carmod'), async (req, res) => {
     }
     
     res.json({ 
-      message: 'Car-Mod erfolgreich hochgeladen', 
+      message: 'Car-Mod erfolgreich hochgeladen und entpackt', 
       filename: req.file.originalname,
-      extracted: extracted 
+      extracted: extracted,
+      path: acConfig.carsPath
     });
   } catch (error) {
     console.error('Fehler beim Hochladen des Car-Mods:', error);
@@ -342,16 +413,27 @@ app.post('/api/upload/track', uploadTrack.single('trackmod'), async (req, res) =
     let extracted = false;
     let warning = null;
     
+    // Stellen Sie sicher, dass der Zielordner existiert
+    if (!acConfig.tracksPath || !fs.existsSync(acConfig.tracksPath)) {
+      return res.status(400).json({ 
+        error: 'Der Assetto Corsa tracks-Pfad ist nicht konfiguriert oder existiert nicht',
+        details: `Pfad: ${acConfig.tracksPath || 'nicht konfiguriert'}`
+      });
+    }
+    
     // Wenn es eine ZIP-Datei ist, entpacken
     if (fileExt === '.zip') {
       try {
+        // Direkt in das content/tracks Verzeichnis des Servers entpacken
         await fs.createReadStream(filePath)
-          .pipe(unzipper.Extract({ path: path.join(__dirname, 'uploads/tracks') }))
+          .pipe(unzipper.Extract({ path: acConfig.tracksPath }))
           .promise();
         
         // ZIP-Datei nach dem Entpacken löschen
         await fs.unlink(filePath);
         extracted = true;
+        
+        console.log(`Track-Mod ${req.file.originalname} erfolgreich entpackt nach ${acConfig.tracksPath}`);
       } catch (error) {
         console.error('Fehler beim Entpacken der ZIP-Datei:', error);
         return res.status(500).json({ 
@@ -362,7 +444,7 @@ app.post('/api/upload/track', uploadTrack.single('trackmod'), async (req, res) =
     } else {
       warning = 'Nicht-ZIP-Datei hochgeladen';
       const message = 'Die Datei wurde hochgeladen, aber nicht automatisch entpackt. ' + 
-                     'Bitte entpacken Sie die Datei manuell im tracks-Verzeichnis und starten Sie den Server neu.';
+                     'Bitte entpacken Sie die Datei manuell im content/tracks-Verzeichnis und starten Sie den Server neu.';
       return res.json({ 
         message: message, 
         warning: warning, 
@@ -372,9 +454,10 @@ app.post('/api/upload/track', uploadTrack.single('trackmod'), async (req, res) =
     }
     
     res.json({ 
-      message: 'Track-Mod erfolgreich hochgeladen', 
+      message: 'Track-Mod erfolgreich hochgeladen und entpackt', 
       filename: req.file.originalname,
-      extracted: extracted 
+      extracted: extracted,
+      path: acConfig.tracksPath
     });
   } catch (error) {
     console.error('Fehler beim Hochladen des Track-Mods:', error);
@@ -388,67 +471,174 @@ app.post('/api/upload/track', uploadTrack.single('trackmod'), async (req, res) =
 // Abrufen aller verfügbaren Car-Mods
 app.get('/api/cars', async (req, res) => {
   try {
-    const carsDir = path.join(__dirname, 'uploads/cars');
-    const carFolders = await fs.readdir(carsDir);
-    const cars = carFolders.filter(item => 
-      fs.statSync(path.join(carsDir, item)).isDirectory()
-    ).map(car => ({
-      id: car,
-      name: car,
-      isStock: false
-    }));
+    // Prüfen, ob der Pfad konfiguriert ist
+    if (!acConfig.carsPath || !fs.existsSync(acConfig.carsPath)) {
+      return res.status(400).json({ 
+        error: 'Der Assetto Corsa cars-Pfad ist nicht konfiguriert oder existiert nicht',
+        details: `Pfad: ${acConfig.carsPath || 'nicht konfiguriert'}`
+      });
+    }
     
-    res.json(cars);
+    // Alle Fahrzeuge aus dem content/cars Verzeichnis lesen
+    const carFolders = await fs.readdir(acConfig.carsPath);
+    
+    // Standardautos filtern (basierend auf der Standardliste oder Namen)
+    // Dies ist für den Fall, dass wir nur benutzerdefinierte Mods anzeigen möchten
+    let stockCars = [];
+    try {
+      // Versuche, die Liste der Standard-Autos abzurufen
+      stockCars = await getStockCarsFromDisk();
+    } catch (error) {
+      console.error('Fehler beim Abrufen der Standard-Autos:', error);
+    }
+    
+    // Liste der Standard-Auto-IDs für den Filter
+    const stockCarIds = stockCars.map(car => car.id);
+    
+    // Nur die benutzerdefinierten Mods zurückgeben (nicht die Standard-Autos)
+    // Wenn wir keine Standard-Autos haben, geben wir alle zurück
+    const modCars = carFolders
+      .filter(car => 
+        // Als Verzeichnis filtern
+        fs.statSync(path.join(acConfig.carsPath, car)).isDirectory() &&
+        // Nur benutzerdefinierte Autos (nicht in der Standardliste)
+        (stockCarIds.length === 0 || !stockCarIds.includes(car))
+      )
+      .map(car => ({
+        id: car,
+        name: car.replace(/_/g, ' '),
+        isStock: false
+      }));
+    
+    res.json(modCars);
   } catch (error) {
     console.error('Fehler beim Abrufen der Car-Mods:', error);
-    res.status(500).json({ error: 'Fehler beim Abrufen der Car-Mods' });
+    res.status(500).json({ error: 'Fehler beim Abrufen der Car-Mods: ' + error.message });
   }
 });
 
 // Abrufen aller verfügbaren Track-Mods
 app.get('/api/tracks', async (req, res) => {
   try {
-    const tracksDir = path.join(__dirname, 'uploads/tracks');
-    const trackFolders = await fs.readdir(tracksDir);
-    const tracks = trackFolders.filter(item => 
-      fs.statSync(path.join(tracksDir, item)).isDirectory()
+    // Prüfen, ob der Pfad konfiguriert ist
+    if (!acConfig.tracksPath || !fs.existsSync(acConfig.tracksPath)) {
+      return res.status(400).json({ 
+        error: 'Der Assetto Corsa tracks-Pfad ist nicht konfiguriert oder existiert nicht',
+        details: `Pfad: ${acConfig.tracksPath || 'nicht konfiguriert'}`
+      });
+    }
+    
+    // Alle Strecken aus dem content/tracks Verzeichnis lesen
+    const trackFolders = await fs.readdir(acConfig.tracksPath);
+    
+    // Standardstrecken filtern
+    let stockTracks = [];
+    try {
+      stockTracks = await getStockTracksFromDisk();
+    } catch (error) {
+      console.error('Fehler beim Abrufen der Standard-Strecken:', error);
+    }
+    
+    // Liste der Standard-Strecken-IDs für den Filter
+    const stockTrackIds = stockTracks.map(track => track.id);
+    
+    // Nur Verzeichnisse und keine Standardstrecken
+    const modTrackFolders = trackFolders.filter(track => 
+      fs.statSync(path.join(acConfig.tracksPath, track)).isDirectory() &&
+      (stockTrackIds.length === 0 || !stockTrackIds.includes(track))
     );
     
     // Für jeden Track die verfügbaren Layouts abrufen
-    const tracksWithLayouts = await Promise.all(tracks.map(async track => {
-      const trackDir = path.join(tracksDir, track);
-      const files = await fs.readdir(trackDir);
+    const modTracks = await Promise.all(modTrackFolders.map(async track => {
+      const trackDir = path.join(acConfig.tracksPath, track);
       
-      // Suche nach UI-Ordner und dann nach ui_track.json
-      const uiFolder = files.find(file => file.toLowerCase() === 'ui');
-      let layouts = [];
+      // Layouts identifizieren - gleiche Methode wie bei getStockTracksFromDisk
+      let layouts = [""];  // Default Layout immer einschließen
       
-      if (uiFolder) {
-        const uiPath = path.join(trackDir, uiFolder);
-        try {
-          const uiFiles = await fs.readdir(uiPath);
-          const uiTrackFile = uiFiles.find(file => file.toLowerCase() === 'ui_track.json');
-          
-          if (uiTrackFile) {
-            const uiTrackData = await fs.readJson(path.join(uiPath, uiTrackFile));
-            layouts = uiTrackData.layouts || [];
-          }
-        } catch (error) {
-          console.error(`Fehler beim Lesen der Layouts für ${track}:`, error);
+      try {
+        // Methode 1: Überprüfen, ob ein "layouts" Verzeichnis existiert
+        const layoutsDir = path.join(trackDir, 'layouts');
+        if (fs.existsSync(layoutsDir) && fs.statSync(layoutsDir).isDirectory()) {
+          const layoutFolders = await fs.readdir(layoutsDir);
+          layouts = [...layouts, ...layoutFolders.filter(
+            layout => fs.statSync(path.join(layoutsDir, layout)).isDirectory()
+          )];
         }
+        
+        // Methode 2: Überprüfen, ob ui_track.json layouts enthält
+        const uiPath = path.join(trackDir, 'ui');
+        if (fs.existsSync(uiPath) && fs.statSync(uiPath).isDirectory()) {
+          try {
+            const uiFiles = await fs.readdir(uiPath);
+            const uiTrackFile = uiFiles.find(file => file.toLowerCase() === 'ui_track.json');
+            
+            if (uiTrackFile) {
+              const uiTrackData = JSON.parse(await fs.readFile(path.join(uiPath, uiTrackFile), 'utf8'));
+              if (uiTrackData.layouts && Array.isArray(uiTrackData.layouts)) {
+                // Layouts aus der UI-Datei extrahieren
+                const layoutNames = uiTrackData.layouts
+                  .filter(layout => layout && layout.name)
+                  .map(layout => layout.name);
+                
+                // Nur neue Layouts hinzufügen, die nicht bereits vorhanden sind
+                layoutNames.forEach(name => {
+                  if (!layouts.includes(name)) {
+                    layouts.push(name);
+                  }
+                });
+              }
+            }
+          } catch (error) {
+            console.error(`Fehler beim Lesen der ui_track.json für ${track}:`, error);
+          }
+        }
+        
+        // Zusätzliche Methode: Nach CONFIG_TRACK Optionen in data/surfaces.ini suchen
+        const dataDir = path.join(trackDir, 'data');
+        if (fs.existsSync(dataDir) && fs.statSync(dataDir).isDirectory()) {
+          const surfacesPath = path.join(dataDir, 'surfaces.ini');
+          if (fs.existsSync(surfacesPath)) {
+            try {
+              const surfacesContent = await fs.readFile(surfacesPath, 'utf8');
+              // Suche nach CONFIG_TRACK Optionen in der surfaces.ini
+              const configTrackMatches = surfacesContent.match(/CONFIG_TRACK=(\w+)/g);
+              if (configTrackMatches) {
+                const configTracks = configTrackMatches.map(match => 
+                  match.replace('CONFIG_TRACK=', '')
+                );
+                
+                // Nur neue Layouts hinzufügen
+                configTracks.forEach(layout => {
+                  if (!layouts.includes(layout)) {
+                    layouts.push(layout);
+                  }
+                });
+              }
+            } catch (error) {
+              console.error(`Fehler beim Lesen der surfaces.ini für ${track}:`, error);
+            }
+          }
+        }
+        
+        // Duplikate entfernen und leere Layouts filtern
+        layouts = [...new Set(layouts)].filter(layout => layout !== null && layout !== undefined);
+        
+      } catch (error) {
+        console.error(`Fehler beim Lesen der Layouts für ${track}:`, error);
       }
       
       return {
-        name: track,
-        layouts: layouts.map(layout => layout.name || ''),
+        id: track,
+        name: track.replace(/_/g, ' '),
+        layouts: layouts,
         isStock: false
       };
     }));
     
-    res.json(tracksWithLayouts);
+    res.json(modTracks);
   } catch (error) {
     console.error('Fehler beim Abrufen der Track-Mods:', error);
-    res.status(500).json({ error: 'Fehler beim Abrufen der Track-Mods' });
+    res.status(500).json({ error: 'Fehler beim Abrufen der Track-Mods: ' + error.message });
   }
 });
 
@@ -458,20 +648,26 @@ app.get('/api/all-cars', async (req, res) => {
     // Standard-Autos direkt aus dem Verzeichnis lesen
     const stockCars = await getStockCarsFromDisk();
     
-    // Mod-Autos abrufen
-    const carsDir = path.join(__dirname, 'uploads/cars');
+    // Mod-Autos abrufen (direkter Aufruf, nicht über API)
     let modCars = [];
     
     try {
-      if (fs.existsSync(carsDir)) {
-        const carFolders = await fs.readdir(carsDir);
-        modCars = carFolders.filter(item => 
-          fs.statSync(path.join(carsDir, item)).isDirectory()
-        ).map(car => ({
-          id: car,
-          name: car,
-          isStock: false
-        }));
+      if (acConfig.carsPath && fs.existsSync(acConfig.carsPath)) {
+        const carFolders = await fs.readdir(acConfig.carsPath);
+        
+        // Liste der Standard-Auto-IDs für den Filter
+        const stockCarIds = stockCars.map(car => car.id);
+        
+        modCars = carFolders
+          .filter(car => 
+            fs.statSync(path.join(acConfig.carsPath, car)).isDirectory() &&
+            !stockCarIds.includes(car) // Nicht in der Standardliste
+          )
+          .map(car => ({
+            id: car,
+            name: car.replace(/_/g, ' '),
+            isStock: false
+          }));
       }
     } catch (error) {
       console.error('Fehler beim Abrufen der Mod-Autos:', error);
@@ -483,7 +679,7 @@ app.get('/api/all-cars', async (req, res) => {
     res.json(allCars);
   } catch (error) {
     console.error('Fehler beim Abrufen aller Autos:', error);
-    res.status(500).json({ error: 'Fehler beim Abrufen aller Autos' });
+    res.status(500).json({ error: 'Fehler beim Abrufen aller Autos: ' + error.message });
   }
 });
 
@@ -493,45 +689,78 @@ app.get('/api/all-tracks', async (req, res) => {
     // Standard-Strecken direkt aus dem Verzeichnis lesen
     const stockTracks = await getStockTracksFromDisk();
     
-    // Mod-Strecken abrufen
-    const tracksDir = path.join(__dirname, 'uploads/tracks');
+    // Mod-Strecken abrufen (direkter Aufruf, nicht über API)
     let modTracks = [];
     
     try {
-      if (fs.existsSync(tracksDir)) {
-        const trackFolders = await fs.readdir(tracksDir);
-        const tracks = trackFolders.filter(item => 
-          fs.statSync(path.join(tracksDir, item)).isDirectory()
+      if (acConfig.tracksPath && fs.existsSync(acConfig.tracksPath)) {
+        const trackFolders = await fs.readdir(acConfig.tracksPath);
+        
+        // Liste der Standard-Strecken-IDs für den Filter
+        const stockTrackIds = stockTracks.map(track => track.id);
+        
+        // Nur Verzeichnisse und keine Standardstrecken
+        const modTrackFolders = trackFolders.filter(track => 
+          fs.statSync(path.join(acConfig.tracksPath, track)).isDirectory() &&
+          !stockTrackIds.includes(track) // Nicht in der Standardliste
         );
         
         // Für jeden Track die verfügbaren Layouts abrufen
-        modTracks = await Promise.all(tracks.map(async track => {
-          const trackDir = path.join(tracksDir, track);
-          const files = await fs.readdir(trackDir);
+        modTracks = await Promise.all(modTrackFolders.map(async track => {
+          const trackDir = path.join(acConfig.tracksPath, track);
           
-          // Suche nach UI-Ordner und dann nach ui_track.json
-          const uiFolder = files.find(file => file.toLowerCase() === 'ui');
-          let layouts = [];
+          // Layouts identifizieren - gleiche Methode wie bei getStockTracksFromDisk
+          let layouts = [""];  // Default Layout immer einschließen
           
-          if (uiFolder) {
-            const uiPath = path.join(trackDir, uiFolder);
-            try {
-              const uiFiles = await fs.readdir(uiPath);
-              const uiTrackFile = uiFiles.find(file => file.toLowerCase() === 'ui_track.json');
-              
-              if (uiTrackFile) {
-                const uiTrackData = await fs.readJson(path.join(uiPath, uiTrackFile));
-                layouts = uiTrackData.layouts || [];
-              }
-            } catch (error) {
-              console.error(`Fehler beim Lesen der Layouts für ${track}:`, error);
+          try {
+            // Methode 1: Überprüfen, ob ein "layouts" Verzeichnis existiert
+            const layoutsDir = path.join(trackDir, 'layouts');
+            if (fs.existsSync(layoutsDir) && fs.statSync(layoutsDir).isDirectory()) {
+              const layoutFolders = await fs.readdir(layoutsDir);
+              layouts = [...layouts, ...layoutFolders.filter(
+                layout => fs.statSync(path.join(layoutsDir, layout)).isDirectory()
+              )];
             }
+            
+            // Methode 2: Überprüfen, ob ui_track.json layouts enthält
+            const uiPath = path.join(trackDir, 'ui');
+            if (fs.existsSync(uiPath) && fs.statSync(uiPath).isDirectory()) {
+              try {
+                const uiFiles = await fs.readdir(uiPath);
+                const uiTrackFile = uiFiles.find(file => file.toLowerCase() === 'ui_track.json');
+                
+                if (uiTrackFile) {
+                  const uiTrackData = JSON.parse(await fs.readFile(path.join(uiPath, uiTrackFile), 'utf8'));
+                  if (uiTrackData.layouts && Array.isArray(uiTrackData.layouts)) {
+                    // Layouts aus der UI-Datei extrahieren
+                    const layoutNames = uiTrackData.layouts
+                      .filter(layout => layout && layout.name)
+                      .map(layout => layout.name);
+                    
+                    // Nur neue Layouts hinzufügen, die nicht bereits vorhanden sind
+                    layoutNames.forEach(name => {
+                      if (!layouts.includes(name)) {
+                        layouts.push(name);
+                      }
+                    });
+                  }
+                }
+              } catch (error) {
+                console.error(`Fehler beim Lesen der ui_track.json für ${track}:`, error);
+              }
+            }
+            
+            // Duplikate entfernen und leere Layouts filtern
+            layouts = [...new Set(layouts)].filter(layout => layout !== null && layout !== undefined);
+            
+          } catch (error) {
+            console.error(`Fehler beim Lesen der Layouts für ${track}:`, error);
           }
           
           return {
             id: track,
-            name: track,
-            layouts: layouts.map(layout => layout.name || ''),
+            name: track.replace(/_/g, ' '),
+            layouts: layouts,
             isStock: false
           };
         }));
@@ -546,7 +775,7 @@ app.get('/api/all-tracks', async (req, res) => {
     res.json(allTracks);
   } catch (error) {
     console.error('Fehler beim Abrufen aller Strecken:', error);
-    res.status(500).json({ error: 'Fehler beim Abrufen aller Strecken' });
+    res.status(500).json({ error: 'Fehler beim Abrufen aller Strecken: ' + error.message });
   }
 });
 
@@ -848,8 +1077,15 @@ function saveServerConfig(config) {
       return { error: "Keine Konfiguration angegeben" };
     }
     
+    // Überprüfen, ob acServerPath konfiguriert ist
+    if (!acServerPath) {
+      return { error: "Der Pfad zum AC Server ist nicht konfiguriert. Bitte konfigurieren Sie den Serverpfad zuerst." };
+    }
+    
     // Stelle sicher, dass der Konfigurationsordner existiert
-    const cfgDir = path.join(path.dirname(acServerPath), 'cfg');
+    // Der cfg-Ordner sollte sich im gleichen Verzeichnis wie die acServer-Executable befinden
+    const acServerDir = path.dirname(acServerPath);
+    const cfgDir = path.join(acServerDir, 'cfg');
     fs.ensureDirSync(cfgDir);
     
     // Pfade für die Konfigurationsdateien
@@ -885,6 +1121,11 @@ function saveServerConfig(config) {
       }
     };
     
+    // Sicherstellen, dass die Autos als Array vorliegen
+    if (!Array.isArray(config.cars)) {
+      config.cars = config.cars ? [config.cars] : [];
+    }
+    
     // Erstellen der server_cfg.ini-Datei im INI-Format
     let serverCfgContent = "";
     
@@ -895,8 +1136,13 @@ function saveServerConfig(config) {
     serverCfgContent += `TRACK=${config.track || 'monza'}\n`;
     serverCfgContent += `CONFIG_TRACK=${config.trackLayout || ''}\n`;
     serverCfgContent += `MAX_CLIENTS=${config.maxClients || 15}\n`;
-    serverCfgContent += `PORT=${config.port || 9600}\n`;
+    
+    // Portkonfiguration nach Assetto Corsa Dokumentation
+    serverCfgContent += `TCP_PORT=${config.port || 9600}\n`;
+    serverCfgContent += `UDP_PORT=${config.port || 9600}\n`;
     serverCfgContent += `HTTP_PORT=${config.httpPort || 8081}\n`;
+    
+    // Weitere Servereinstellungen
     serverCfgContent += `REGISTER_TO_LOBBY=${config.registerToLobby || 1}\n`;
     serverCfgContent += `ADMIN_PASSWORD=${config.adminPassword || 'adminpass'}\n`;
     serverCfgContent += `PASSWORD=${config.password || ''}\n`;
@@ -970,6 +1216,12 @@ function saveServerConfig(config) {
       serverCfgContent += `SESSION_TRANSFER=${defaultConfig.DYNAMIC_TRACK.SESSION_TRANSFER}\n`;
     }
     
+    // Booking-Session hinzufügen (wichtig für manche Server-Setups)
+    serverCfgContent += "\n[BOOK]\n";
+    serverCfgContent += `NAME=Buchung\n`;
+    serverCfgContent += `TIME=10\n`;
+    serverCfgContent += `IS_OPEN=1\n`;
+    
     // Erstellen der entry_list.ini-Datei für die Autoeinträge
     let entryListContent = "";
     const cars = config.cars || [];
@@ -977,7 +1229,7 @@ function saveServerConfig(config) {
     cars.forEach((car, index) => {
       entryListContent += `[CAR_${index}]\n`;
       entryListContent += `MODEL=${car}\n`;
-      entryListContent += `SKIN=\n`; // Standard-Skin
+      entryListContent += `SKIN=${config.skins && config.skins[index] ? config.skins[index] : ''}\n`; // Standard-Skin
       entryListContent += `SPECTATOR_MODE=0\n`;
       entryListContent += `DRIVERNAME=\n`;
       entryListContent += `TEAM=\n`;
@@ -991,6 +1243,9 @@ function saveServerConfig(config) {
     fs.writeFileSync(entryListPath, entryListContent);
     
     console.log(`Konfigurationen gespeichert in:\n- Server Config: ${serverCfgPath}\n- Entry List: ${entryListPath}`);
+    
+    // Globale Konfiguration aktualisieren
+    acServerConfig = { ...acServerConfig, ...config };
     
     return { 
       success: true, 
