@@ -1,0 +1,158 @@
+[
+  {
+    "id": "imola",
+    "name": "Autodromo Enzo e Dino Ferrari (Imola)",
+    "layouts": [""],
+    "isStock": true
+  },
+  {
+    "id": "magione",
+    "name": "Autodromo di Magione",
+    "layouts": [""],
+    "isStock": true
+  },
+  {
+    "id": "monza",
+    "name": "Autodromo Nazionale Monza",
+    "layouts": ["", "junior"],
+    "isStock": true
+  },
+  {
+    "id": "mugello",
+    "name": "Autodromo Internazionale del Mugello",
+    "layouts": [""],
+    "isStock": true
+  },
+  {
+    "id": "arese",
+    "name": "Circuito di Arese",
+    "layouts": [""],
+    "isStock": true
+  },
+  {
+    "id": "barcelona",
+    "name": "Circuit de Barcelona Catalunya",
+    "layouts": ["", "moto", "nacional", "layout_no_chicanes"],
+    "isStock": true
+  },
+  {
+    "id": "spa",
+    "name": "Circuit de Spa-Francorchamps",
+    "layouts": [""],
+    "isStock": true
+  },
+  {
+    "id": "zandvoort",
+    "name": "Circuit Park Zandvoort",
+    "layouts": ["", "national", "club"],
+    "isStock": true
+  },
+  {
+    "id": "brands_hatch",
+    "name": "Brands Hatch",
+    "layouts": ["", "indy"],
+    "isStock": true
+  },
+  {
+    "id": "doningtonpark",
+    "name": "Donington Park",
+    "layouts": ["", "national"],
+    "isStock": true
+  },
+  {
+    "id": "ks_drag",
+    "name": "KS Drag",
+    "layouts": [""],
+    "isStock": true
+  },
+  {
+    "id": "drift_playground",
+    "name": "KS Drift Playground",
+    "layouts": [""],
+    "isStock": true
+  },
+  {
+    "id": "ks_drift",
+    "name": "KS Drift",
+    "layouts": [""],
+    "isStock": true
+  },
+  {
+    "id": "ks_nordschleife",
+    "name": "Nürburgring Nordschleife",
+    "layouts": ["", "touristenfahrten", "endurance", "sprint_cup", "24h"],
+    "isStock": true
+  },
+  {
+    "id": "monza66",
+    "name": "Monza 1966",
+    "layouts": ["", "junior", "full_no_chicanes", "no_chicanes"],
+    "isStock": true
+  },
+  {
+    "id": "ks_nurburgring",
+    "name": "Nürburgring",
+    "layouts": ["", "layout_gp_b", "layout_sprint_a", "layout_sprint_b", "layout_sprint", "layout_gp_a", "layout_gp"],
+    "isStock": true
+  },
+  {
+    "id": "ks_red_bull_ring",
+    "name": "Red Bull Ring",
+    "layouts": ["", "layout_national", "layout_gp"],
+    "isStock": true
+  },
+  {
+    "id": "ks_laguna_seca",
+    "name": "Mazda Raceway Laguna Seca",
+    "layouts": [""],
+    "isStock": true
+  },
+  {
+    "id": "silverstone",
+    "name": "Silverstone",
+    "layouts": ["", "international", "national"],
+    "isStock": true
+  },
+  {
+    "id": "silverstone1967",
+    "name": "Silverstone 1967",
+    "layouts": [""],
+    "isStock": true
+  },
+  {
+    "id": "trento-bondone",
+    "name": "Trento Bondone Hill Climb",
+    "layouts": [""],
+    "isStock": true
+  },
+  {
+    "id": "salzburgring",
+    "name": "Salzburgring",
+    "layouts": [""],
+    "isStock": true
+  },
+  {
+    "id": "ks_vallelunga",
+    "name": "Autodromo di Vallelunga",
+    "layouts": ["", "extended", "classic", "club"],
+    "isStock": true
+  },
+  {
+    "id": "ks_zandvoort",
+    "name": "Circuit Park Zandvoort",
+    "layouts": ["", "national", "club"],
+    "isStock": true
+  },
+  {
+    "id": "ks_black_cat_county",
+    "name": "Black Cat County",
+    "layouts": [""],
+    "isStock": true
+  },
+  {
+    "id": "highlands",
+    "name": "Highlands",
+    "layouts": ["", "international", "national", "club", "a_circuit"],
+    "isStock": true
+  }
+] 
