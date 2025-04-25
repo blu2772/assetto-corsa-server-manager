@@ -92,35 +92,10 @@ const trackStorage = multer.diskStorage({
 const uploadCar = multer({ storage: carStorage });
 const uploadTrack = multer({ storage: trackStorage });
 
-// Laden der Standard-Inhalte aus JSON-Dateien
-let stockCars = [];
-let stockTracks = [];
-
-try {
-  const stockCarsPath = path.join(__dirname, 'config/stockCars.json');
-  const stockTracksPath = path.join(__dirname, 'config/stockTracks.json');
-  
-  if (fs.existsSync(stockCarsPath)) {
-    stockCars = JSON.parse(fs.readFileSync(stockCarsPath, 'utf8'));
-    console.log(`${stockCars.length} Standard-Autos geladen`);
-  } else {
-    console.warn('Warnung: stockCars.json nicht gefunden');
-  }
-  
-  if (fs.existsSync(stockTracksPath)) {
-    stockTracks = JSON.parse(fs.readFileSync(stockTracksPath, 'utf8'));
-    console.log(`${stockTracks.length} Standard-Strecken geladen`);
-  } else {
-    console.warn('Warnung: stockTracks.json nicht gefunden');
-  }
-} catch (error) {
-  console.error('Fehler beim Laden der Standard-Inhalte:', error);
-}
-
 // Assetto Corsa Konfiguration
 const acConfig = {
   // Pfad zur Assetto Corsa Installation
-  acPath: process.env.AC_PATH || '', // Standardmäßig leer, muss vom Benutzer gesetzt werden
+  acPath: process.env.AC_PATH || '/home/steam/assetto', // Standard für den Assetto Corsa Server
   carsPath: '', // Wird basierend auf acPath automatisch gesetzt
   tracksPath: '', // Wird basierend auf acPath automatisch gesetzt
 };
@@ -130,6 +105,86 @@ function updateAcPaths() {
   if (acConfig.acPath) {
     acConfig.carsPath = path.join(acConfig.acPath, 'content', 'cars');
     acConfig.tracksPath = path.join(acConfig.acPath, 'content', 'tracks');
+  }
+}
+
+// Initial Pfade setzen
+updateAcPaths();
+
+// Funktionen zum Lesen der Assetto Corsa Inhalte aus dem Installationsverzeichnis
+
+// Funktion zum Lesen der verfügbaren Autos
+async function getStockCarsFromDisk() {
+  try {
+    if (!fs.existsSync(acConfig.carsPath)) {
+      console.warn(`Warnung: Pfad ${acConfig.carsPath} existiert nicht`);
+      return [];
+    }
+    
+    const carFolders = await fs.readdir(acConfig.carsPath);
+    const cars = carFolders
+      .filter(car => fs.statSync(path.join(acConfig.carsPath, car)).isDirectory())
+      .map(car => ({
+        id: car,
+        name: car.replace(/_/g, ' '),
+        isStock: true
+      }));
+    
+    console.log(`${cars.length} Standard-Autos aus dem Verzeichnis geladen`);
+    return cars;
+  } catch (error) {
+    console.error('Fehler beim Lesen der Standard-Autos:', error);
+    return [];
+  }
+}
+
+// Funktion zum Lesen der verfügbaren Strecken und ihrer Layouts
+async function getStockTracksFromDisk() {
+  try {
+    if (!fs.existsSync(acConfig.tracksPath)) {
+      console.warn(`Warnung: Pfad ${acConfig.tracksPath} existiert nicht`);
+      return [];
+    }
+    
+    const trackFolders = await fs.readdir(acConfig.tracksPath);
+    const tracks = await Promise.all(trackFolders
+      .filter(track => fs.statSync(path.join(acConfig.tracksPath, track)).isDirectory())
+      .map(async track => {
+        const trackDir = path.join(acConfig.tracksPath, track);
+        const files = await fs.readdir(trackDir);
+        
+        // Suche nach UI-Ordner und dann nach ui_track.json
+        const uiFolder = files.find(file => file.toLowerCase() === 'ui');
+        let layouts = [];
+        
+        if (uiFolder) {
+          const uiPath = path.join(trackDir, uiFolder);
+          try {
+            const uiFiles = await fs.readdir(uiPath);
+            const uiTrackFile = uiFiles.find(file => file.toLowerCase() === 'ui_track.json');
+            
+            if (uiTrackFile) {
+              const uiTrackData = await fs.readJson(path.join(uiPath, uiTrackFile));
+              layouts = uiTrackData.layouts || [];
+            }
+          } catch (error) {
+            console.error(`Fehler beim Lesen der Layouts für ${track}:`, error);
+          }
+        }
+        
+        return {
+          id: track,
+          name: track.replace(/_/g, ' '),
+          layouts: layouts.map(layout => layout.name || ''),
+          isStock: true
+        };
+      }));
+    
+    console.log(`${tracks.length} Standard-Strecken aus dem Verzeichnis geladen`);
+    return tracks;
+  } catch (error) {
+    console.error('Fehler beim Lesen der Standard-Strecken:', error);
+    return [];
   }
 }
 
@@ -163,6 +218,7 @@ const MAX_OUTPUT_LINES = 1000;
 // Abrufen der verfügbaren Assetto Corsa Standard-Autos
 app.get('/api/stock-cars', async (req, res) => {
   try {
+    const stockCars = await getStockCarsFromDisk();
     res.json(stockCars);
   } catch (error) {
     console.error('Fehler beim Abrufen der Standard-Autos:', error);
@@ -173,6 +229,7 @@ app.get('/api/stock-cars', async (req, res) => {
 // Abrufen der verfügbaren Assetto Corsa Standard-Strecken
 app.get('/api/stock-tracks', async (req, res) => {
   try {
+    const stockTracks = await getStockTracksFromDisk();
     res.json(stockTracks);
   } catch (error) {
     console.error('Fehler beim Abrufen der Standard-Strecken:', error);
@@ -398,22 +455,30 @@ app.get('/api/tracks', async (req, res) => {
 // GET: Alle Cars und Tracks über einen Endpunkt abrufen
 app.get('/api/all-cars', async (req, res) => {
   try {
-    // Standard-Autos aus dem stockCars Array
-    let stockCarsData = stockCars;
+    // Standard-Autos direkt aus dem Verzeichnis lesen
+    const stockCars = await getStockCarsFromDisk();
     
     // Mod-Autos abrufen
+    const carsDir = path.join(__dirname, 'uploads/cars');
     let modCars = [];
+    
     try {
-      const modCarsResponse = await fetch(`${req.protocol}://${req.get('host')}/api/cars`);
-      if (modCarsResponse.ok) {
-        modCars = await modCarsResponse.json();
+      if (fs.existsSync(carsDir)) {
+        const carFolders = await fs.readdir(carsDir);
+        modCars = carFolders.filter(item => 
+          fs.statSync(path.join(carsDir, item)).isDirectory()
+        ).map(car => ({
+          id: car,
+          name: car,
+          isStock: false
+        }));
       }
     } catch (error) {
       console.error('Fehler beim Abrufen der Mod-Autos:', error);
     }
     
     // Alle Autos kombinieren
-    const allCars = [...stockCarsData, ...modCars];
+    const allCars = [...stockCars, ...modCars];
     
     res.json(allCars);
   } catch (error) {
@@ -425,22 +490,58 @@ app.get('/api/all-cars', async (req, res) => {
 // GET: Alle Strecken über einen Endpunkt abrufen
 app.get('/api/all-tracks', async (req, res) => {
   try {
-    // Standard-Strecken aus dem stockTracks Array
-    let stockTracksData = stockTracks;
+    // Standard-Strecken direkt aus dem Verzeichnis lesen
+    const stockTracks = await getStockTracksFromDisk();
     
     // Mod-Strecken abrufen
+    const tracksDir = path.join(__dirname, 'uploads/tracks');
     let modTracks = [];
+    
     try {
-      const modTracksResponse = await fetch(`${req.protocol}://${req.get('host')}/api/tracks`);
-      if (modTracksResponse.ok) {
-        modTracks = await modTracksResponse.json();
+      if (fs.existsSync(tracksDir)) {
+        const trackFolders = await fs.readdir(tracksDir);
+        const tracks = trackFolders.filter(item => 
+          fs.statSync(path.join(tracksDir, item)).isDirectory()
+        );
+        
+        // Für jeden Track die verfügbaren Layouts abrufen
+        modTracks = await Promise.all(tracks.map(async track => {
+          const trackDir = path.join(tracksDir, track);
+          const files = await fs.readdir(trackDir);
+          
+          // Suche nach UI-Ordner und dann nach ui_track.json
+          const uiFolder = files.find(file => file.toLowerCase() === 'ui');
+          let layouts = [];
+          
+          if (uiFolder) {
+            const uiPath = path.join(trackDir, uiFolder);
+            try {
+              const uiFiles = await fs.readdir(uiPath);
+              const uiTrackFile = uiFiles.find(file => file.toLowerCase() === 'ui_track.json');
+              
+              if (uiTrackFile) {
+                const uiTrackData = await fs.readJson(path.join(uiPath, uiTrackFile));
+                layouts = uiTrackData.layouts || [];
+              }
+            } catch (error) {
+              console.error(`Fehler beim Lesen der Layouts für ${track}:`, error);
+            }
+          }
+          
+          return {
+            id: track,
+            name: track,
+            layouts: layouts.map(layout => layout.name || ''),
+            isStock: false
+          };
+        }));
       }
     } catch (error) {
       console.error('Fehler beim Abrufen der Mod-Strecken:', error);
     }
     
     // Alle Strecken kombinieren
-    const allTracks = [...stockTracksData, ...modTracks];
+    const allTracks = [...stockTracks, ...modTracks];
     
     res.json(allTracks);
   } catch (error) {
