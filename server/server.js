@@ -395,143 +395,25 @@ app.get('/api/tracks', async (req, res) => {
   }
 });
 
-// GET: Alle Standard-Autos von der AC-Installation abrufen
-app.get('/api/stock-cars', (req, res) => {
-  try {
-    // Überprüfen, ob der AC-Pfad konfiguriert ist
-    if (acConfig.acPath && acConfig.carsPath && fs.existsSync(acConfig.carsPath)) {
-      // Versuche Autos aus der AC-Installation zu lesen
-      try {
-        // Verzeichnisse im Cars-Ordner auslesen
-        const carDirectories = fs.readdirSync(acConfig.carsPath, { withFileTypes: true })
-          .filter(dirent => dirent.isDirectory())
-          .map(dirent => dirent.name);
-        
-        // Autos mit Zusatzinformationen zurückgeben
-        const cars = carDirectories.map(car => ({
-          id: car,
-          name: car.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
-          isStock: true
-        }));
-        
-        return res.json(cars);
-      } catch (error) {
-        console.error('Fehler beim Auslesen der Standard-Autos aus der Installation:', error);
-        // Fallback zur statischen Liste, wenn Fehler auftreten
-      }
-    }
-    
-    // Wenn kein AC-Pfad konfiguriert ist oder Fehler auftreten, verwende die statische Liste
-    console.log('Verwende statische Standard-Auto-Liste');
-    return res.json(stockCars);
-  } catch (error) {
-    console.error('Fehler beim Abrufen der Standard-Autos:', error);
-    res.status(500).json({ error: 'Fehler beim Abrufen der Standard-Autos' });
-  }
-});
-
-// GET: Alle Standard-Strecken von der AC-Installation abrufen
-app.get('/api/stock-tracks', (req, res) => {
-  try {
-    // Überprüfen, ob der AC-Pfad konfiguriert ist
-    if (acConfig.acPath && acConfig.tracksPath && fs.existsSync(acConfig.tracksPath)) {
-      // Versuche Strecken aus der AC-Installation zu lesen
-      try {
-        // Verzeichnisse im Tracks-Ordner auslesen
-        const trackDirectories = fs.readdirSync(acConfig.tracksPath, { withFileTypes: true })
-          .filter(dirent => dirent.isDirectory())
-          .map(dirent => dirent.name);
-        
-        // Für jede Strecke die Layouts ermitteln
-        const tracks = trackDirectories.map(track => {
-          const trackPath = path.join(acConfig.tracksPath, track);
-          const layoutsPath = path.join(trackPath, 'ui', 'ui_track.json');
-          
-          let layouts = [];
-          
-          // Versuche, die Layouts aus der ui_track.json zu lesen
-          if (fs.existsSync(layoutsPath)) {
-            try {
-              const uiTrackData = JSON.parse(fs.readFileSync(layoutsPath, 'utf8'));
-              if (uiTrackData.layouts) {
-                layouts = Object.keys(uiTrackData.layouts);
-              }
-            } catch (parseError) {
-              console.warn(`Fehler beim Parsen der ui_track.json für ${track}:`, parseError);
-            }
-          }
-          
-          // Alternativ: Layouts aus dem Verzeichnis auslesen
-          if (layouts.length === 0) {
-            const layoutsDir = path.join(trackPath, 'layouts');
-            if (fs.existsSync(layoutsDir)) {
-              layouts = fs.readdirSync(layoutsDir, { withFileTypes: true })
-                .filter(dirent => dirent.isDirectory())
-                .map(dirent => dirent.name);
-            }
-          }
-          
-          // Wenn keine Layouts gefunden wurden, mindestens ein leeres Layout hinzufügen
-          if (layouts.length === 0) {
-            layouts = [''];
-          }
-          
-          // Name der Strecke aus dem Verzeichnisnamen ableiten
-          const trackName = track.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-          
-          return {
-            id: track,
-            name: trackName,
-            layouts: layouts,
-            isStock: true
-          };
-        });
-        
-        return res.json(tracks);
-      } catch (error) {
-        console.error('Fehler beim Auslesen der Standard-Strecken aus der Installation:', error);
-        // Fallback zur statischen Liste, wenn Fehler auftreten
-      }
-    }
-    
-    // Wenn kein AC-Pfad konfiguriert ist oder Fehler auftreten, verwende die statische Liste
-    console.log('Verwende statische Standard-Strecken-Liste');
-    return res.json(stockTracks);
-  } catch (error) {
-    console.error('Fehler beim Abrufen der Standard-Strecken:', error);
-    res.status(500).json({ error: 'Fehler beim Abrufen der Standard-Strecken' });
-  }
-});
-
 // GET: Alle Cars und Tracks über einen Endpunkt abrufen
 app.get('/api/all-cars', async (req, res) => {
   try {
-    // Standard-Autos abrufen
-    let stockCars = [];
-    if (acConfig.acPath && acConfig.carsPath && fs.existsSync(acConfig.carsPath)) {
-      try {
-        const response = await fetch(`${req.protocol}://${req.get('host')}/api/stock-cars`);
-        if (response.ok) {
-          stockCars = await response.json();
-        }
-      } catch (error) {
-        console.error('Fehler beim Abrufen der Standard-Autos:', error);
-      }
-    }
+    // Standard-Autos aus dem stockCars Array
+    let stockCarsData = stockCars;
     
     // Mod-Autos abrufen
     let modCars = [];
     try {
-      const response = await fetch(`${req.protocol}://${req.get('host')}/api/cars`);
-      if (response.ok) {
-        modCars = await response.json();
+      const modCarsResponse = await fetch(`${req.protocol}://${req.get('host')}/api/cars`);
+      if (modCarsResponse.ok) {
+        modCars = await modCarsResponse.json();
       }
     } catch (error) {
       console.error('Fehler beim Abrufen der Mod-Autos:', error);
     }
     
     // Alle Autos kombinieren
-    const allCars = [...stockCars, ...modCars];
+    const allCars = [...stockCarsData, ...modCars];
     
     res.json(allCars);
   } catch (error) {
@@ -543,32 +425,22 @@ app.get('/api/all-cars', async (req, res) => {
 // GET: Alle Strecken über einen Endpunkt abrufen
 app.get('/api/all-tracks', async (req, res) => {
   try {
-    // Standard-Strecken abrufen
-    let stockTracks = [];
-    if (acConfig.acPath && acConfig.tracksPath && fs.existsSync(acConfig.tracksPath)) {
-      try {
-        const response = await fetch(`${req.protocol}://${req.get('host')}/api/stock-tracks`);
-        if (response.ok) {
-          stockTracks = await response.json();
-        }
-      } catch (error) {
-        console.error('Fehler beim Abrufen der Standard-Strecken:', error);
-      }
-    }
+    // Standard-Strecken aus dem stockTracks Array
+    let stockTracksData = stockTracks;
     
     // Mod-Strecken abrufen
     let modTracks = [];
     try {
-      const response = await fetch(`${req.protocol}://${req.get('host')}/api/tracks`);
-      if (response.ok) {
-        modTracks = await response.json();
+      const modTracksResponse = await fetch(`${req.protocol}://${req.get('host')}/api/tracks`);
+      if (modTracksResponse.ok) {
+        modTracks = await modTracksResponse.json();
       }
     } catch (error) {
       console.error('Fehler beim Abrufen der Mod-Strecken:', error);
     }
     
     // Alle Strecken kombinieren
-    const allTracks = [...stockTracks, ...modTracks];
+    const allTracks = [...stockTracksData, ...modTracks];
     
     res.json(allTracks);
   } catch (error) {
