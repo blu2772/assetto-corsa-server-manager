@@ -155,6 +155,17 @@ export const serverApi = {
     }
   },
   
+  // Aktuelle Serverkonfiguration abrufen
+  getConfig: async () => {
+    try {
+      const response = await apiClient.get('/server/config');
+      return response.data;
+    } catch (error) {
+      console.error('Fehler beim Abrufen der Serverkonfiguration:', error);
+      throw error;
+    }
+  },
+  
   // Serverausgabe abrufen
   getOutput: async () => {
     try {
