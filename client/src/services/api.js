@@ -1,4 +1,4 @@
-import axios from 'axios';
+aaaaimport axios from 'axios';
 
 const API_URL = process.env.REACT_APP_API_URL || `${window.location.origin}/api`;
 
@@ -217,6 +217,17 @@ export const serverApi = {
       return response.data;
     } catch (error) {
       console.error('Fehler beim Aktualisieren des Server-Pfads:', error);
+      throw error;
+    }
+  },
+  
+  // AC-Installationspfad aktualisieren
+  updateACPath: async (acPath) => {
+    try {
+      const response = await apiClient.post('/ac-path', { acPath });
+      return response.data;
+    } catch (error) {
+      console.error('Fehler beim Aktualisieren des AC-Installationspfads:', error);
       throw error;
     }
   },
