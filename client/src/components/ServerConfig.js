@@ -11,10 +11,12 @@ const ServerConfig = () => {
   const [serverStatus, setServerStatus] = useState({ running: false });
   const [availableCars, setAvailableCars] = useState([]);
   const [availableTracks, setAvailableTracks] = useState([]);
+  const [serverConfig, setServerConfig] = useState(null);
   
   useEffect(() => {
     fetchData();
     fetchServerStatus();
+    fetchServerConfig();
     
     // Aktualisiere den Serverstatus alle 10 Sekunden
     const interval = setInterval(fetchServerStatus, 10000);
@@ -59,6 +61,15 @@ const ServerConfig = () => {
       setServerStatus(status);
     } catch (error) {
       console.error('Fehler beim Abrufen des Serverstatus:', error);
+    }
+  };
+  
+  const fetchServerConfig = async () => {
+    try {
+      const config = await serverApi.getConfig();
+      setServerConfig(config);
+    } catch (error) {
+      console.error('Fehler beim Abrufen der Serverkonfiguration:', error);
     }
   };
   
@@ -169,7 +180,7 @@ const ServerConfig = () => {
             <p>Lade Daten...</p>
           ) : (
             <Formik
-              initialValues={{
+              initialValues={serverConfig || {
                 serverName: 'Mein Assetto Corsa Server',
                 cars: availableCars.length > 0 ? [getCarId(availableCars[0])] : [],
                 track: availableTracks.length > 0 ? getTrackName(availableTracks[0]) : '',
