@@ -68,6 +68,7 @@ const ServerConfig = () => {
     try {
       const config = await serverApi.getConfig();
       setServerConfig(config);
+      console.log('Serverkonfiguration erfolgreich geladen:', config);
     } catch (error) {
       console.error('Fehler beim Abrufen der Serverkonfiguration:', error);
     }
