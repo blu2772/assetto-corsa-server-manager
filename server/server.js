@@ -621,32 +621,31 @@ app.get('/api/tracks', async (req, res) => {
 app.get('/api/stock-cars', (req, res) => {
   try {
     // Überprüfen, ob der AC-Pfad konfiguriert ist
-    if (!acConfig.acPath || !acConfig.carsPath) {
-      return res.status(400).json({ 
-        error: 'Assetto Corsa Pfad ist nicht konfiguriert. Bitte konfigurieren Sie zuerst den AC-Pfad.' 
-      });
+    if (acConfig.acPath && acConfig.carsPath && fs.existsSync(acConfig.carsPath)) {
+      // Versuche Autos aus der AC-Installation zu lesen
+      try {
+        // Verzeichnisse im Cars-Ordner auslesen
+        const carDirectories = fs.readdirSync(acConfig.carsPath, { withFileTypes: true })
+          .filter(dirent => dirent.isDirectory())
+          .map(dirent => dirent.name);
+        
+        // Autos mit Zusatzinformationen zurückgeben
+        const cars = carDirectories.map(car => ({
+          id: car,
+          name: car.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+          isStock: true
+        }));
+        
+        return res.json(cars);
+      } catch (error) {
+        console.error('Fehler beim Auslesen der Standard-Autos aus der Installation:', error);
+        // Fallback zur statischen Liste, wenn Fehler auftreten
+      }
     }
     
-    // Überprüfen, ob das Cars-Verzeichnis existiert
-    if (!fs.existsSync(acConfig.carsPath)) {
-      return res.status(404).json({ 
-        error: `Das Verzeichnis existiert nicht: ${acConfig.carsPath}` 
-      });
-    }
-    
-    // Verzeichnisse im Cars-Ordner auslesen
-    const carDirectories = fs.readdirSync(acConfig.carsPath, { withFileTypes: true })
-      .filter(dirent => dirent.isDirectory())
-      .map(dirent => dirent.name);
-    
-    // Autos mit Zusatzinformationen zurückgeben
-    const cars = carDirectories.map(car => ({
-      id: car,
-      name: car.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
-      isStock: true
-    }));
-    
-    res.json(cars);
+    // Wenn kein AC-Pfad konfiguriert ist oder Fehler auftreten, verwende die statische Liste
+    console.log('Verwende statische Standard-Auto-Liste');
+    return res.json(stockCars);
   } catch (error) {
     console.error('Fehler beim Abrufen der Standard-Autos:', error);
     res.status(500).json({ error: 'Fehler beim Abrufen der Standard-Autos' });
@@ -657,70 +656,69 @@ app.get('/api/stock-cars', (req, res) => {
 app.get('/api/stock-tracks', (req, res) => {
   try {
     // Überprüfen, ob der AC-Pfad konfiguriert ist
-    if (!acConfig.acPath || !acConfig.tracksPath) {
-      return res.status(400).json({ 
-        error: 'Assetto Corsa Pfad ist nicht konfiguriert. Bitte konfigurieren Sie zuerst den AC-Pfad.' 
-      });
-    }
-    
-    // Überprüfen, ob das Tracks-Verzeichnis existiert
-    if (!fs.existsSync(acConfig.tracksPath)) {
-      return res.status(404).json({ 
-        error: `Das Verzeichnis existiert nicht: ${acConfig.tracksPath}` 
-      });
-    }
-    
-    // Verzeichnisse im Tracks-Ordner auslesen
-    const trackDirectories = fs.readdirSync(acConfig.tracksPath, { withFileTypes: true })
-      .filter(dirent => dirent.isDirectory())
-      .map(dirent => dirent.name);
-    
-    // Für jede Strecke die Layouts ermitteln
-    const tracks = trackDirectories.map(track => {
-      const trackPath = path.join(acConfig.tracksPath, track);
-      const layoutsPath = path.join(trackPath, 'ui', 'ui_track.json');
-      
-      let layouts = [];
-      
-      // Versuche, die Layouts aus der ui_track.json zu lesen
-      if (fs.existsSync(layoutsPath)) {
-        try {
-          const uiTrackData = JSON.parse(fs.readFileSync(layoutsPath, 'utf8'));
-          if (uiTrackData.layouts) {
-            layouts = Object.keys(uiTrackData.layouts);
+    if (acConfig.acPath && acConfig.tracksPath && fs.existsSync(acConfig.tracksPath)) {
+      // Versuche Strecken aus der AC-Installation zu lesen
+      try {
+        // Verzeichnisse im Tracks-Ordner auslesen
+        const trackDirectories = fs.readdirSync(acConfig.tracksPath, { withFileTypes: true })
+          .filter(dirent => dirent.isDirectory())
+          .map(dirent => dirent.name);
+        
+        // Für jede Strecke die Layouts ermitteln
+        const tracks = trackDirectories.map(track => {
+          const trackPath = path.join(acConfig.tracksPath, track);
+          const layoutsPath = path.join(trackPath, 'ui', 'ui_track.json');
+          
+          let layouts = [];
+          
+          // Versuche, die Layouts aus der ui_track.json zu lesen
+          if (fs.existsSync(layoutsPath)) {
+            try {
+              const uiTrackData = JSON.parse(fs.readFileSync(layoutsPath, 'utf8'));
+              if (uiTrackData.layouts) {
+                layouts = Object.keys(uiTrackData.layouts);
+              }
+            } catch (parseError) {
+              console.warn(`Fehler beim Parsen der ui_track.json für ${track}:`, parseError);
+            }
           }
-        } catch (parseError) {
-          console.warn(`Fehler beim Parsen der ui_track.json für ${track}:`, parseError);
-        }
+          
+          // Alternativ: Layouts aus dem Verzeichnis auslesen
+          if (layouts.length === 0) {
+            const layoutsDir = path.join(trackPath, 'layouts');
+            if (fs.existsSync(layoutsDir)) {
+              layouts = fs.readdirSync(layoutsDir, { withFileTypes: true })
+                .filter(dirent => dirent.isDirectory())
+                .map(dirent => dirent.name);
+            }
+          }
+          
+          // Wenn keine Layouts gefunden wurden, mindestens ein leeres Layout hinzufügen
+          if (layouts.length === 0) {
+            layouts = [''];
+          }
+          
+          // Name der Strecke aus dem Verzeichnisnamen ableiten
+          const trackName = track.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+          
+          return {
+            id: track,
+            name: trackName,
+            layouts: layouts,
+            isStock: true
+          };
+        });
+        
+        return res.json(tracks);
+      } catch (error) {
+        console.error('Fehler beim Auslesen der Standard-Strecken aus der Installation:', error);
+        // Fallback zur statischen Liste, wenn Fehler auftreten
       }
-      
-      // Alternativ: Layouts aus dem Verzeichnis auslesen
-      if (layouts.length === 0) {
-        const layoutsDir = path.join(trackPath, 'layouts');
-        if (fs.existsSync(layoutsDir)) {
-          layouts = fs.readdirSync(layoutsDir, { withFileTypes: true })
-            .filter(dirent => dirent.isDirectory())
-            .map(dirent => dirent.name);
-        }
-      }
-      
-      // Wenn keine Layouts gefunden wurden, mindestens ein leeres Layout hinzufügen
-      if (layouts.length === 0) {
-        layouts = [''];
-      }
-      
-      // Name der Strecke aus dem Verzeichnisnamen ableiten
-      const trackName = track.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-      
-      return {
-        id: track,
-        name: trackName,
-        layouts: layouts,
-        isStock: true
-      };
-    });
+    }
     
-    res.json(tracks);
+    // Wenn kein AC-Pfad konfiguriert ist oder Fehler auftreten, verwende die statische Liste
+    console.log('Verwende statische Standard-Strecken-Liste');
+    return res.json(stockTracks);
   } catch (error) {
     console.error('Fehler beim Abrufen der Standard-Strecken:', error);
     res.status(500).json({ error: 'Fehler beim Abrufen der Standard-Strecken' });
