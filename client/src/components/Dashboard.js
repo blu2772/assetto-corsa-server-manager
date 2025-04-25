@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Card, Button, Row, Col, Alert, InputGroup, Form, Spinner, Image } from 'react-bootstrap';
+import { Card, Button, Row, Col, Alert, InputGroup, Form, Spinner, Image, ListGroup, Badge, Accordion } from 'react-bootstrap';
 import { toast } from 'react-toastify';
-import { FaPlay, FaStop, FaCar, FaRoad, FaLink, FaCopy, FaGamepad, FaGlobe, FaQrcode } from 'react-icons/fa';
+import { FaPlay, FaStop, FaCar, FaRoad, FaLink, FaCopy, FaGamepad, FaGlobe, FaQrcode, FaServer, FaInfoCircle, FaExclamationTriangle } from 'react-icons/fa';
 import { serverApi, carModsApi, trackModsApi } from '../services/api';
 import ServerTerminal from './ServerTerminal';
 
@@ -14,6 +14,7 @@ const Dashboard = ({ serverStatus, onStatusChange }) => {
   const [connectionInfo, setConnectionInfo] = useState(null);
   const [loadingConnectionInfo, setLoadingConnectionInfo] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [error, setError] = useState(null);
   
   const qrCodeRef = useRef(null);
   const [qrCodeUrl, setQrCodeUrl] = useState('');
@@ -115,7 +116,98 @@ const Dashboard = ({ serverStatus, onStatusChange }) => {
       });
   };
   
-  // Komponente für Serververbindungsinformationen
+  // Informationskarte für die Verzeichnisstruktur und Arbeitsabläufe
+  const ServerInfoCard = () => (
+    <Card className="mb-4">
+      <Card.Header className="d-flex justify-content-between align-items-center">
+        <div>
+          <FaInfoCircle className="me-2" /> Assetto Corsa Server-Informationen
+        </div>
+      </Card.Header>
+      <Card.Body>
+        <Accordion defaultActiveKey="0">
+          <Accordion.Item eventKey="0">
+            <Accordion.Header>
+              <FaServer className="me-2" /> Verzeichnisstruktur des Servers
+            </Accordion.Header>
+            <Accordion.Body>
+              <p>Der Assetto Corsa Dedicated Server ist typischerweise wie folgt aufgebaut:</p>
+              <ListGroup variant="flush" className="mb-3">
+                <ListGroup.Item>
+                  <strong>cfg/</strong>: Enthält alle Konfigurationsdateien, u. a. <code>server_cfg.ini</code> und <code>entry_list.ini</code>
+                </ListGroup.Item>
+                <ListGroup.Item>
+                  <strong>content/cars/</strong>: Hier liegen die Auto-Mods
+                </ListGroup.Item>
+                <ListGroup.Item>
+                  <strong>content/tracks/</strong>: Hier liegen die Strecken-Mods
+                </ListGroup.Item>
+              </ListGroup>
+              
+              <Alert variant="info">
+                <FaInfoCircle className="me-2" />
+                Diese Webanwendung nutzt diese Struktur, um Inhalte direkt in die passenden Verzeichnisse zu laden und Konfigurationsdateien zu erstellen.
+              </Alert>
+            </Accordion.Body>
+          </Accordion.Item>
+          
+          <Accordion.Item eventKey="1">
+            <Accordion.Header>
+              <FaInfoCircle className="me-2" /> Mods hochladen
+            </Accordion.Header>
+            <Accordion.Body>
+              <p>So funktioniert der Upload von Mods:</p>
+              
+              <ol>
+                <li>Laden Sie <strong>ZIP-Dateien</strong> der Mods hoch (empfohlen)</li>
+                <li>Die Anwendung entpackt sie automatisch in die passenden Verzeichnisse:
+                  <ul>
+                    <li>Autos nach <code>content/cars/</code></li>
+                    <li>Strecken nach <code>content/tracks/</code></li>
+                  </ul>
+                </li>
+                <li>Nach dem Upload sollten Sie den Server neu starten, damit neue Inhalte erkannt werden</li>
+              </ol>
+              
+              <Alert variant="warning">
+                <FaExclamationTriangle className="me-2" />
+                Stellen Sie sicher, dass die hochgeladenen ZIP-Dateien korrekt strukturiert sind! Der Inhalt der ZIP-Datei sollte direkt den Mod-Ordner enthalten (z.B. <code>ks_ferrari488/</code>).
+              </Alert>
+            </Accordion.Body>
+          </Accordion.Item>
+          
+          <Accordion.Item eventKey="2">
+            <Accordion.Header>
+              <FaInfoCircle className="me-2" /> Konfigurationsdateien
+            </Accordion.Header>
+            <Accordion.Body>
+              <p>Die wichtigsten Konfigurationsdateien im <code>cfg/</code>-Ordner:</p>
+              
+              <ListGroup variant="flush" className="mb-3">
+                <ListGroup.Item>
+                  <strong>server_cfg.ini</strong>: Hauptkonfigurationsdatei des Servers
+                  <ul className="mt-2">
+                    <li><code>TRACK</code>: Name des Strecken-Ordners</li>
+                    <li><code>CONFIG_TRACK</code>: Layout-Ordner (optional)</li>
+                    <li><code>CARS</code>: Semikolon-separierte Liste der erlaubten Autos</li>
+                  </ul>
+                </ListGroup.Item>
+                <ListGroup.Item>
+                  <strong>entry_list.ini</strong>: Definition der verfügbaren Autos und ihrer Skins
+                </ListGroup.Item>
+              </ListGroup>
+              
+              <Alert variant="success">
+                <FaInfoCircle className="me-2" />
+                Diese Anwendung erstellt diese Konfigurationsdateien automatisch basierend auf Ihren Einstellungen im Bereich "Serverkonfiguration".
+              </Alert>
+            </Accordion.Body>
+          </Accordion.Item>
+        </Accordion>
+      </Card.Body>
+    </Card>
+  );
+  
   const ServerConnectionCard = () => {
     if (!serverStatus || !serverStatus.running) {
       return (
@@ -258,6 +350,12 @@ const Dashboard = ({ serverStatus, onStatusChange }) => {
     <div>
       <h1 className="mb-4">Dashboard</h1>
       
+      {error && (
+        <Alert variant="danger" dismissible onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+      
       <ServerTerminal 
         serverStatus={serverStatus} 
         onAction={handleTerminalAction} 
@@ -329,6 +427,9 @@ const Dashboard = ({ serverStatus, onStatusChange }) => {
               </Row>
             </Card.Body>
           </Card>
+          
+          {/* Server-Informationskarte */}
+          <ServerInfoCard />
         </Col>
         
         <Col md={6}>
