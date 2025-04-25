@@ -284,6 +284,22 @@ const stockTracks = [
   // ... weitere Strecken könnten hier hinzugefügt werden
 ];
 
+// Assetto Corsa Konfiguration
+const acConfig = {
+  // Pfad zur Assetto Corsa Installation
+  acPath: process.env.AC_PATH || '', // Standardmäßig leer, muss vom Benutzer gesetzt werden
+  carsPath: '', // Wird basierend auf acPath automatisch gesetzt
+  tracksPath: '', // Wird basierend auf acPath automatisch gesetzt
+};
+
+// Hilfsfunktion zum Aktualisieren der Pfade basierend auf dem Hauptpfad
+function updateAcPaths() {
+  if (acConfig.acPath) {
+    acConfig.carsPath = path.join(acConfig.acPath, 'content', 'cars');
+    acConfig.tracksPath = path.join(acConfig.acPath, 'content', 'tracks');
+  }
+}
+
 // Assetto Corsa Server Konfiguration
 const acServerConfig = {
   serverName: 'Mein Assetto Corsa Server',
@@ -299,10 +315,11 @@ const acServerConfig = {
 };
 
 // Pfad zur Server-Executable
-let acServerPath = '/pfad/zu/acServer'; // Anpassen nach tatsächlichem Pfad
+let acServerPath = '/home/steam/assetto/acServer'; // Korrekter Pfad zum Assetto Corsa Server
 
 // Aktuelle Serverprozess-ID
-let serverProcess = null;
+let acServerProcess = null;
+let serverStartTime = null; // Zeitpunkt, zu dem der Server gestartet wurde
 
 // Serverausgabe speichern
 let serverOutput = [];
@@ -330,13 +347,58 @@ app.get('/api/stock-tracks', async (req, res) => {
   }
 });
 
-// Aktuelle Serverkonfiguration abrufen
+// GET: Servereinstellungen abrufen
 app.get('/api/server/config', (req, res) => {
   try {
-    res.json(acServerConfig);
+    const cfgDir = path.join(path.dirname(acServerPath), 'cfg');
+    const serverCfgPath = path.join(cfgDir, 'server_cfg.ini');
+    const entryListPath = path.join(cfgDir, 'entry_list.ini');
+    
+    console.log(`Lese Konfiguration von: ${serverCfgPath}`);
+    console.log(`Lese Eintragsliste von: ${entryListPath}`);
+    
+    let config = {};
+    
+    // Prüfen, ob die Dateien existieren
+    if (fs.existsSync(serverCfgPath) && fs.existsSync(entryListPath)) {
+      // server_cfg.ini einlesen
+      const serverCfg = ini.parse(fs.readFileSync(serverCfgPath, 'utf-8'));
+      
+      // Basis-Konfiguration aus server_cfg.ini
+      config = {
+        serverName: serverCfg.SERVER?.NAME || 'Assetto Corsa Server',
+        cars: serverCfg.SERVER?.CARS?.split(';') || ['bmw_m3_e30'],
+        track: serverCfg.SERVER?.TRACK || 'magione',
+        trackLayout: serverCfg.SERVER?.CONFIG || '',
+        maxClients: parseInt(serverCfg.SERVER?.MAX_CLIENTS || 5),
+        port: parseInt(serverCfg.SERVER?.UDP_PORT || 9600),
+        httpPort: parseInt(serverCfg.SERVER?.HTTP_PORT || 8081),
+        registerToLobby: serverCfg.SERVER?.REGISTER_TO_LOBBY === '1',
+        password: serverCfg.SERVER?.PASSWORD || '',
+        adminPassword: serverCfg.SERVER?.ADMIN_PASSWORD || ''
+      };
+      
+      console.log('Konfiguration erfolgreich geladen:', config);
+    } else {
+      console.log('Keine Konfigurationsdateien gefunden, verwende Standardeinstellungen');
+      config = {
+        serverName: 'Assetto Corsa Server',
+        cars: ['bmw_m3_e30'],
+        track: 'magione',
+        trackLayout: '',
+        maxClients: 5,
+        port: 9600,
+        httpPort: 8081,
+        registerToLobby: true,
+        password: '',
+        adminPassword: ''
+      };
+    }
+    
+    res.json(config);
   } catch (error) {
-    console.error('Fehler beim Abrufen der Serverkonfiguration:', error);
-    res.status(500).json({ error: 'Fehler beim Abrufen der Serverkonfiguration' });
+    console.error('Fehler beim Abrufen der Konfiguration:', error);
+    res.status(500).json({ error: 'Fehler beim Abrufen der Konfiguration' });
   }
 });
 
@@ -517,20 +579,145 @@ app.get('/api/tracks', async (req, res) => {
   }
 });
 
-// Abrufen aller verfügbaren Autos (Standard und Mods)
+// GET: Alle Standard-Autos von der AC-Installation abrufen
+app.get('/api/stock-cars', (req, res) => {
+  try {
+    // Überprüfen, ob der AC-Pfad konfiguriert ist
+    if (!acConfig.acPath || !acConfig.carsPath) {
+      return res.status(400).json({ 
+        error: 'Assetto Corsa Pfad ist nicht konfiguriert. Bitte konfigurieren Sie zuerst den AC-Pfad.' 
+      });
+    }
+    
+    // Überprüfen, ob das Cars-Verzeichnis existiert
+    if (!fs.existsSync(acConfig.carsPath)) {
+      return res.status(404).json({ 
+        error: `Das Verzeichnis existiert nicht: ${acConfig.carsPath}` 
+      });
+    }
+    
+    // Verzeichnisse im Cars-Ordner auslesen
+    const carDirectories = fs.readdirSync(acConfig.carsPath, { withFileTypes: true })
+      .filter(dirent => dirent.isDirectory())
+      .map(dirent => dirent.name);
+    
+    // Autos mit Zusatzinformationen zurückgeben
+    const cars = carDirectories.map(car => ({
+      id: car,
+      name: car.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+      isStock: true
+    }));
+    
+    res.json(cars);
+  } catch (error) {
+    console.error('Fehler beim Abrufen der Standard-Autos:', error);
+    res.status(500).json({ error: 'Fehler beim Abrufen der Standard-Autos' });
+  }
+});
+
+// GET: Alle Standard-Strecken von der AC-Installation abrufen
+app.get('/api/stock-tracks', (req, res) => {
+  try {
+    // Überprüfen, ob der AC-Pfad konfiguriert ist
+    if (!acConfig.acPath || !acConfig.tracksPath) {
+      return res.status(400).json({ 
+        error: 'Assetto Corsa Pfad ist nicht konfiguriert. Bitte konfigurieren Sie zuerst den AC-Pfad.' 
+      });
+    }
+    
+    // Überprüfen, ob das Tracks-Verzeichnis existiert
+    if (!fs.existsSync(acConfig.tracksPath)) {
+      return res.status(404).json({ 
+        error: `Das Verzeichnis existiert nicht: ${acConfig.tracksPath}` 
+      });
+    }
+    
+    // Verzeichnisse im Tracks-Ordner auslesen
+    const trackDirectories = fs.readdirSync(acConfig.tracksPath, { withFileTypes: true })
+      .filter(dirent => dirent.isDirectory())
+      .map(dirent => dirent.name);
+    
+    // Für jede Strecke die Layouts ermitteln
+    const tracks = trackDirectories.map(track => {
+      const trackPath = path.join(acConfig.tracksPath, track);
+      const layoutsPath = path.join(trackPath, 'ui', 'ui_track.json');
+      
+      let layouts = [];
+      
+      // Versuche, die Layouts aus der ui_track.json zu lesen
+      if (fs.existsSync(layoutsPath)) {
+        try {
+          const uiTrackData = JSON.parse(fs.readFileSync(layoutsPath, 'utf8'));
+          if (uiTrackData.layouts) {
+            layouts = Object.keys(uiTrackData.layouts);
+          }
+        } catch (parseError) {
+          console.warn(`Fehler beim Parsen der ui_track.json für ${track}:`, parseError);
+        }
+      }
+      
+      // Alternativ: Layouts aus dem Verzeichnis auslesen
+      if (layouts.length === 0) {
+        const layoutsDir = path.join(trackPath, 'layouts');
+        if (fs.existsSync(layoutsDir)) {
+          layouts = fs.readdirSync(layoutsDir, { withFileTypes: true })
+            .filter(dirent => dirent.isDirectory())
+            .map(dirent => dirent.name);
+        }
+      }
+      
+      // Wenn keine Layouts gefunden wurden, mindestens ein leeres Layout hinzufügen
+      if (layouts.length === 0) {
+        layouts = [''];
+      }
+      
+      // Name der Strecke aus dem Verzeichnisnamen ableiten
+      const trackName = track.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+      
+      return {
+        id: track,
+        name: trackName,
+        layouts: layouts,
+        isStock: true
+      };
+    });
+    
+    res.json(tracks);
+  } catch (error) {
+    console.error('Fehler beim Abrufen der Standard-Strecken:', error);
+    res.status(500).json({ error: 'Fehler beim Abrufen der Standard-Strecken' });
+  }
+});
+
+// GET: Alle Cars und Tracks über einen Endpunkt abrufen
 app.get('/api/all-cars', async (req, res) => {
   try {
-    // Standard-Autos und Mods abrufen
-    const [stockCarsResponse, modsResponse] = await Promise.all([
-      stockCars,
-      fetch(`http://localhost:${PORT}/api/cars`).then(res => res.json())
-    ]);
+    // Standard-Autos abrufen
+    let stockCars = [];
+    if (acConfig.acPath && acConfig.carsPath && fs.existsSync(acConfig.carsPath)) {
+      try {
+        const response = await fetch(`${req.protocol}://${req.get('host')}/api/stock-cars`);
+        if (response.ok) {
+          stockCars = await response.json();
+        }
+      } catch (error) {
+        console.error('Fehler beim Abrufen der Standard-Autos:', error);
+      }
+    }
     
-    // Alle Autos zusammenführen
-    const allCars = [
-      ...stockCarsResponse,
-      ...modsResponse
-    ];
+    // Mod-Autos abrufen
+    let modCars = [];
+    try {
+      const response = await fetch(`${req.protocol}://${req.get('host')}/api/cars`);
+      if (response.ok) {
+        modCars = await response.json();
+      }
+    } catch (error) {
+      console.error('Fehler beim Abrufen der Mod-Autos:', error);
+    }
+    
+    // Alle Autos kombinieren
+    const allCars = [...stockCars, ...modCars];
     
     res.json(allCars);
   } catch (error) {
@@ -539,20 +726,35 @@ app.get('/api/all-cars', async (req, res) => {
   }
 });
 
-// Abrufen aller verfügbaren Strecken (Standard und Mods)
+// GET: Alle Strecken über einen Endpunkt abrufen
 app.get('/api/all-tracks', async (req, res) => {
   try {
-    // Standard-Strecken und Mods abrufen
-    const [stockTracksResponse, modsResponse] = await Promise.all([
-      stockTracks,
-      fetch(`http://localhost:${PORT}/api/tracks`).then(res => res.json())
-    ]);
+    // Standard-Strecken abrufen
+    let stockTracks = [];
+    if (acConfig.acPath && acConfig.tracksPath && fs.existsSync(acConfig.tracksPath)) {
+      try {
+        const response = await fetch(`${req.protocol}://${req.get('host')}/api/stock-tracks`);
+        if (response.ok) {
+          stockTracks = await response.json();
+        }
+      } catch (error) {
+        console.error('Fehler beim Abrufen der Standard-Strecken:', error);
+      }
+    }
     
-    // Alle Strecken zusammenführen
-    const allTracks = [
-      ...stockTracksResponse,
-      ...modsResponse
-    ];
+    // Mod-Strecken abrufen
+    let modTracks = [];
+    try {
+      const response = await fetch(`${req.protocol}://${req.get('host')}/api/tracks`);
+      if (response.ok) {
+        modTracks = await response.json();
+      }
+    } catch (error) {
+      console.error('Fehler beim Abrufen der Mod-Strecken:', error);
+    }
+    
+    // Alle Strecken kombinieren
+    const allTracks = [...stockTracks, ...modTracks];
     
     res.json(allTracks);
   } catch (error) {
@@ -561,13 +763,19 @@ app.get('/api/all-tracks', async (req, res) => {
   }
 });
 
-// Serverstatus abrufen
+// GET: Server-Status abrufen
 app.get('/api/server/status', (req, res) => {
-  const isRunning = serverProcess !== null;
-  res.json({ 
-    running: isRunning,
-    outputCount: serverOutput.length
-  });
+  if (acServerProcess) {
+    res.json({
+      status: 'running',
+      pid: acServerProcess.pid,
+      uptime: Math.floor((Date.now() - serverStartTime) / 1000) // Uptime in Sekunden
+    });
+  } else {
+    res.json({
+      status: 'stopped'
+    });
+  }
 });
 
 // Serverausgabe abrufen
@@ -607,7 +815,7 @@ app.get('/api/server/connect-info', (req, res) => {
       port: acServerConfig.port,
       httpPort: acServerConfig.httpPort,
       password: acServerConfig.password,
-      running: serverProcess !== null,
+      running: acServerProcess !== null,
       cars: acServerConfig.cars,
       track: acServerConfig.track,
       trackLayout: acServerConfig.trackLayout,
@@ -624,21 +832,107 @@ app.get('/api/server/connect-info', (req, res) => {
   }
 });
 
-// Serverkonfiguration aktualisieren
+// POST: Serverkonfiguration aktualisieren
 app.post('/api/server/config', (req, res) => {
+  // Überprüfen, ob Konfiguration empfangen wurde
+  if (!req.body || Object.keys(req.body).length === 0) {
+    return res.status(400).json({ error: 'Keine Konfigurationsdaten erhalten' });
+  }
+
   try {
-    const newConfig = req.body;
+    console.log('Neue Serverkonfiguration erhalten:', JSON.stringify(req.body, null, 2));
     
-    // Konfiguration aktualisieren
-    Object.assign(acServerConfig, newConfig);
+    // Alten Konfigurationswert sichern
+    Object.assign(acServerConfig, req.body);
     
-    // Konfigurationsdatei speichern
+    // Sicherstellen, dass die Autos als Array vorliegen
+    if (!Array.isArray(acServerConfig.cars)) {
+      acServerConfig.cars = [acServerConfig.cars];
+    }
+    
+    // Pfade zu den Konfigurationsdateien definieren
+    const acServerDir = path.dirname(acServerPath);
+    const cfgDir = path.join(acServerDir, 'cfg');
+    const serverCfgPath = path.join(cfgDir, 'server_cfg.ini');
+    const entryListPath = path.join(cfgDir, 'entry_list.ini');
+    
+    // Sicherstellen, dass das Konfigurationsverzeichnis existiert
+    if (!fs.existsSync(cfgDir)) {
+      console.log(`Erstelle Konfigurationsverzeichnis: ${cfgDir}`);
+      fs.mkdirSync(cfgDir, { recursive: true });
+    }
+
+    // Die server_cfg.ini erstellen
+    const serverCfg = [
+      '[SERVER]',
+      `NAME=${acServerConfig.serverName}`,
+      `CARS=${acServerConfig.cars.join(';')}`,
+      `TRACK=${acServerConfig.track}`,
+      `CONFIG_TRACK=${acServerConfig.trackLayout || ''}`,
+      `MAX_CLIENTS=${acServerConfig.maxClients || 18}`,
+      `ADMIN_PASSWORD=${acServerConfig.adminPassword || 'admin'}`,
+      `UDP_PORT=${acServerConfig.port || 9600}`,
+      `TCP_PORT=${acServerConfig.port || 9600}`,
+      `HTTP_PORT=${acServerConfig.httpPort || 8081}`,
+      `PASSWORD=${acServerConfig.password || ''}`,
+      '',
+      '[PRACTICE]',
+      'NAME=Freies Fahren',
+      'TIME=0',
+      'IS_OPEN=1',
+      '',
+      '[WEATHER]',
+      'GRAPHICS=3_clear',
+      'BASE_TEMPERATURE_AMBIENT=18',
+      'BASE_TEMPERATURE_ROAD=7',
+      'VARIATION_AMBIENT=2',
+      'VARIATION_ROAD=2',
+      '',
+      '[DYNAMIC_TRACK]',
+      'SESSION_START=90',
+      'RANDOMNESS=0',
+      'SESSION_TRANSFER=90',
+      'LAP_GAIN=22',
+      '',
+      '[BOOK]',
+      'NAME=acServerManager'
+    ].join('\n');
+
+    // Die entry_list.ini erstellen
+    let entryList = [];
+    
+    // Für jedes Auto einen Eintrag erstellen
+    acServerConfig.cars.forEach((car, index) => {
+      entryList.push(`[CAR_${index}]`);
+      entryList.push(`MODEL=${car}`);
+      entryList.push(`SKIN=` + (acServerConfig.skins && acServerConfig.skins[index] ? acServerConfig.skins[index] : 'default'));
+      entryList.push(`SPECTATOR_MODE=0`);
+      entryList.push(`DRIVERNAME=`);
+      entryList.push(`TEAM=`);
+      entryList.push(`GUID=`);
+      entryList.push(`BALLAST=0`);
+      entryList.push(`RESTRICTOR=0`);
+      entryList.push('');
+    });
+
+    // Konfigurationsdateien speichern
+    fs.writeFileSync(serverCfgPath, serverCfg);
+    fs.writeFileSync(entryListPath, entryList.join('\n'));
+    
+    console.log(`Konfigurationen gespeichert in:`);
+    console.log(`- Server Config: ${serverCfgPath}`);
+    console.log(`- Entry List: ${entryListPath}`);
+    
+    // Lokale Kopie der Konfiguration aktualisieren
     saveServerConfig();
     
-    res.json({ message: 'Serverkonfiguration aktualisiert', config: acServerConfig });
+    res.json({
+      message: 'Konfiguration erfolgreich aktualisiert',
+      config: acServerConfig
+    });
   } catch (error) {
-    console.error('Fehler beim Aktualisieren der Serverkonfiguration:', error);
-    res.status(500).json({ error: 'Fehler beim Aktualisieren der Serverkonfiguration' });
+    console.error('Fehler beim Aktualisieren der Konfiguration:', error);
+    res.status(500).json({ error: 'Fehler beim Aktualisieren der Konfiguration: ' + error.message });
   }
 });
 
@@ -662,137 +956,88 @@ app.post('/api/server-path', (req, res) => {
   }
 });
 
-// Starte den Assetto Corsa Server
+// POST: Server starten
 app.post('/api/server/start', (req, res) => {
-  if (serverProcess) {
+  if (acServerProcess) {
     return res.status(400).json({ error: 'Server läuft bereits' });
   }
-  
+
+  if (!fs.existsSync(acServerPath)) {
+    return res.status(400).json({ error: `Serverpfad existiert nicht: ${acServerPath}` });
+  }
+
   try {
-    // Konfiguration aktualisieren, falls neue Werte vorhanden sind
-    if (req.body) {
-      Object.assign(acServerConfig, req.body);
-      saveServerConfig();
-    }
+    console.log('Server wird gestartet...');
     
-    // Serverausgabe zurücksetzen
-    serverOutput = [];
+    // Pfade zu den Konfigurationsdateien definieren
+    const acServerDir = path.dirname(acServerPath);
+    const cfgDir = path.join(acServerDir, 'cfg');
     
-    // Protokolliere Start-Informationen
-    const timestamp = new Date().toISOString();
-    serverOutput.push(`[${timestamp}] Starting Assetto Corsa Server...`);
-    serverOutput.push(`[${timestamp}] Server path: ${acServerPath}`);
-    serverOutput.push(`[${timestamp}] Server configuration: ${JSON.stringify(acServerConfig, null, 2)}`);
-    
-    // Server als spawn statt exec starten, um Ausgabe zu erfassen
-    const options = {
-      cwd: path.dirname(acServerPath),
-      shell: true
-    };
-    
-    serverProcess = spawn(acServerPath, [], options);
-    
-    if (!serverProcess) {
-      throw new Error('Server konnte nicht gestartet werden');
-    }
-    
-    // Ausgabe vom Server erfassen
-    serverProcess.stdout.on('data', (data) => {
-      const timestamp = new Date().toISOString();
-      const lines = data.toString().split('\n').filter(line => line.trim() !== '');
-      
-      lines.forEach(line => {
-        serverOutput.push(`[${timestamp}] ${line}`);
-        // Begrenze die Anzahl der gespeicherten Zeilen
-        if (serverOutput.length > MAX_OUTPUT_LINES) {
-          serverOutput.shift();
-        }
-      });
-      
-      console.log(`Server stdout: ${data}`);
+    // Verzeichnis überprüfen, in dem sich der Server befindet
+    serverStartTime = Date.now();
+    acServerProcess = spawn(acServerPath, [], { 
+      cwd: acServerDir, 
+      env: { ...process.env },
+      detached: false
     });
-    
-    // Fehlerausgabe vom Server erfassen
-    serverProcess.stderr.on('data', (data) => {
-      const timestamp = new Date().toISOString();
-      const lines = data.toString().split('\n').filter(line => line.trim() !== '');
-      
-      lines.forEach(line => {
-        serverOutput.push(`[${timestamp}] ERROR: ${line}`);
-        // Begrenze die Anzahl der gespeicherten Zeilen
-        if (serverOutput.length > MAX_OUTPUT_LINES) {
-          serverOutput.shift();
-        }
-      });
-      
-      console.error(`Server stderr: ${data}`);
+
+    console.log(`Server gestartet mit PID: ${acServerProcess.pid}`);
+
+    acServerProcess.stdout.on('data', (data) => {
+      console.log(`AC Server Ausgabe: ${data}`);
     });
-    
-    // Ereignisse vom Server überwachen
-    serverProcess.on('error', (error) => {
-      const timestamp = new Date().toISOString();
-      serverOutput.push(`[${timestamp}] ERROR: ${error.message}`);
-      console.error('Server process error:', error);
-      serverProcess = null;
+
+    acServerProcess.stderr.on('data', (data) => {
+      console.error(`AC Server Fehler: ${data}`);
     });
-    
-    serverProcess.on('exit', (code, signal) => {
-      const timestamp = new Date().toISOString();
-      serverOutput.push(`[${timestamp}] Assetto Corsa Server beendet mit Code ${code}, Signal: ${signal}`);
-      console.log(`Server exited with code ${code} and signal ${signal}`);
-      serverProcess = null;
+
+    acServerProcess.on('close', (code) => {
+      console.log(`AC Server beendet mit Code: ${code}`);
+      acServerProcess = null;
     });
-    
-    // Protokolliere erfolgreichen Start
-    serverOutput.push(`[${timestamp}] Assetto Corsa Server erfolgreich gestartet mit PID ${serverProcess.pid}`);
-    
+
     res.json({ 
-      message: 'Assetto Corsa Server gestartet',
-      pid: serverProcess.pid
+      message: 'Server erfolgreich gestartet', 
+      pid: acServerProcess.pid 
     });
   } catch (error) {
     console.error('Fehler beim Starten des Servers:', error);
-    const timestamp = new Date().toISOString();
-    serverOutput.push(`[${timestamp}] FEHLER BEIM STARTEN: ${error.message}`);
     res.status(500).json({ error: 'Fehler beim Starten des Servers: ' + error.message });
   }
 });
 
-// Stoppe den Assetto Corsa Server
+// POST: Server stoppen
 app.post('/api/server/stop', (req, res) => {
-  if (!serverProcess) {
+  if (!acServerProcess) {
     return res.status(400).json({ error: 'Server läuft nicht' });
   }
-  
+
   try {
-    const timestamp = new Date().toISOString();
-    serverOutput.push(`[${timestamp}] Stoppe Assetto Corsa Server...`);
+    console.log('Server wird gestoppt...');
+    const stopped = acServerProcess.kill();
+    acServerProcess = null;
     
-    // Serverneustart SIGTERM-Signal senden
-    serverProcess.kill('SIGTERM');
-    
-    // Optional: Warte kurz und töte den Prozess gewaltsam, falls er nicht reagiert
-    setTimeout(() => {
-      if (serverProcess) {
-        serverProcess.kill('SIGKILL');
-        serverProcess = null;
-      }
-    }, 5000);
-    
-    serverOutput.push(`[${timestamp}] Assetto Corsa Server gestoppt`);
-    res.json({ message: 'Assetto Corsa Server gestoppt' });
+    if (stopped) {
+      res.json({ message: 'Server erfolgreich gestoppt' });
+    } else {
+      res.status(500).json({ error: 'Fehler beim Stoppen des Servers' });
+    }
   } catch (error) {
     console.error('Fehler beim Stoppen des Servers:', error);
-    const timestamp = new Date().toISOString();
-    serverOutput.push(`[${timestamp}] FEHLER BEIM STOPPEN: ${error.message}`);
-    res.status(500).json({ error: 'Fehler beim Stoppen des Servers' });
+    res.status(500).json({ error: 'Fehler beim Stoppen des Servers: ' + error.message });
   }
 });
 
 // Hilfsfunktion zum Speichern der Serverkonfiguration
 function saveServerConfig() {
-  const serverConfigPath = path.join(__dirname, 'config/server_cfg.ini');
-  const entryListPath = path.join(__dirname, 'config/entry_list.ini');
+  const serverConfigPath = path.join(path.dirname(acServerPath), 'cfg/server_cfg.ini');
+  const entryListPath = path.join(path.dirname(acServerPath), 'cfg/entry_list.ini');
+  
+  // Sicherstellen, dass das cfg-Verzeichnis existiert
+  fs.ensureDirSync(path.join(path.dirname(acServerPath), 'cfg'));
+  
+  console.log('Speichere Konfiguration nach:', serverConfigPath);
+  console.log('Aktuelle Konfiguration:', JSON.stringify(acServerConfig, null, 2));
   
   // server_cfg.ini erstellen
   const serverCfg = {
@@ -800,7 +1045,7 @@ function saveServerConfig() {
       NAME: acServerConfig.serverName,
       CARS: acServerConfig.cars.join(';'),
       TRACK: acServerConfig.track,
-      CONFIG_TRACK: acServerConfig.trackLayout,
+      CONFIG: acServerConfig.trackLayout,
       MAX_CLIENTS: acServerConfig.maxClients,
       PORT: acServerConfig.port,
       HTTP_PORT: acServerConfig.httpPort,
@@ -823,7 +1068,50 @@ function saveServerConfig() {
   });
   
   fs.writeFileSync(entryListPath, entryList);
+  
+  console.log('Konfigurationsdateien erfolgreich gespeichert');
 }
+
+// POST: AC Installation Pfad aktualisieren
+app.post('/api/ac-path', (req, res) => {
+  try {
+    const { acPath } = req.body;
+    
+    if (!acPath) {
+      return res.status(400).json({ error: 'AC-Installationspfad muss angegeben werden' });
+    }
+    
+    // Überprüfen, ob der Pfad existiert
+    if (!fs.existsSync(acPath)) {
+      return res.status(400).json({ error: `Der angegebene Pfad existiert nicht: ${acPath}` });
+    }
+    
+    // Überprüfen, ob es sich um eine gültige AC-Installation handelt
+    const contentPath = path.join(acPath, 'content');
+    const carsPath = path.join(contentPath, 'cars');
+    const tracksPath = path.join(contentPath, 'tracks');
+    
+    if (!fs.existsSync(contentPath) || !fs.existsSync(carsPath) || !fs.existsSync(tracksPath)) {
+      return res.status(400).json({ 
+        error: 'Ungültiger Assetto Corsa Pfad. Es wurden keine content/cars/tracks Verzeichnisse gefunden.' 
+      });
+    }
+    
+    // Pfad in der Konfiguration speichern
+    acConfig.acPath = acPath;
+    updateAcPaths();
+    
+    res.json({ 
+      message: 'Assetto Corsa Installationspfad aktualisiert',
+      acPath: acConfig.acPath,
+      carsPath: acConfig.carsPath,
+      tracksPath: acConfig.tracksPath
+    });
+  } catch (error) {
+    console.error('Fehler beim Aktualisieren des AC-Installationspfads:', error);
+    res.status(500).json({ error: 'Fehler beim Aktualisieren des AC-Installationspfads' });
+  }
+});
 
 // Catch-all Route für React-App
 app.get('*', (req, res) => {
@@ -833,11 +1121,16 @@ app.get('*', (req, res) => {
 // Server starten
 app.listen(PORT, () => {
   console.log(`Server läuft auf Port ${PORT}`);
+  console.log(`Assetto Corsa Server Pfad: ${acServerPath}`);
   
   // Stellen Sie sicher, dass die Upload- und Konfigurations-Verzeichnisse existieren
   fs.ensureDirSync(path.join(__dirname, 'uploads/cars'));
   fs.ensureDirSync(path.join(__dirname, 'uploads/tracks'));
-  fs.ensureDirSync(path.join(__dirname, 'config'));
+  
+  // Sicherstellen, dass das cfg-Verzeichnis im Assetto Corsa Verzeichnis existiert
+  const cfgDir = path.join(path.dirname(acServerPath), 'cfg');
+  fs.ensureDirSync(cfgDir);
+  console.log(`Assetto Corsa cfg-Verzeichnis: ${cfgDir}`);
   
   // Initialen Serverkonfigurationsdateien erstellen
   saveServerConfig();
