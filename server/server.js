@@ -629,90 +629,21 @@ app.post('/api/server/config', (req, res) => {
   try {
     console.log('Neue Serverkonfiguration erhalten:', JSON.stringify(req.body, null, 2));
     
-    // Pfade zu den Konfigurationsdateien definieren
-    const acServerDir = path.dirname(acServerPath);
-    const cfgDir = path.join(acServerDir, 'cfg');
-    const serverCfgPath = path.join(cfgDir, 'server_cfg.ini');
-    const entryListPath = path.join(cfgDir, 'entry_list.ini');
+    // Die Konfiguration des Benutzers mit der verbesserten saveServerConfig-Funktion speichern
+    // Diese Funktion enthält Standardwerte für Wetter, dynamische Strecke, etc.
+    const result = saveServerConfig(req.body);
     
-    // Sicherstellen, dass das Konfigurationsverzeichnis existiert
-    if (!fs.existsSync(cfgDir)) {
-      console.log(`Erstelle Konfigurationsverzeichnis: ${cfgDir}`);
-      fs.mkdirSync(cfgDir, { recursive: true });
+    if (result.error) {
+      return res.status(500).json({ error: result.error });
     }
-
-    // Aktualisiere die Serverkonfiguration im acServerConfig-Objekt
-    const config = req.body;
     
-    // Sicherstellen, dass die Autos als Array vorliegen
-    if (!Array.isArray(config.cars)) {
-      config.cars = [config.cars];
-    }
-
-    // Die server_cfg.ini erstellen
-    const serverCfg = [
-      '[SERVER]',
-      `NAME=${config.serverName}`,
-      `CARS=${config.cars.join(';')}`,
-      `TRACK=${config.track}`,
-      `CONFIG_TRACK=${config.trackLayout || ''}`,
-      `MAX_CLIENTS=${config.maxClients || 18}`,
-      `ADMIN_PASSWORD=${config.adminPassword || 'admin'}`,
-      `UDP_PORT=${config.port || 9600}`,
-      `TCP_PORT=${config.port || 9600}`,
-      `HTTP_PORT=${config.httpPort || 8081}`,
-      `PASSWORD=${config.password || ''}`,
-      '',
-      '[PRACTICE]',
-      'NAME=Freies Fahren',
-      'TIME=0',
-      'IS_OPEN=1',
-      '',
-      '[WEATHER]',
-      'GRAPHICS=3_clear',
-      'BASE_TEMPERATURE_AMBIENT=18',
-      'BASE_TEMPERATURE_ROAD=7',
-      'VARIATION_AMBIENT=2',
-      'VARIATION_ROAD=2',
-      '',
-      '[DYNAMIC_TRACK]',
-      'SESSION_START=90',
-      'RANDOMNESS=0',
-      'SESSION_TRANSFER=90',
-      'LAP_GAIN=22',
-      '',
-      '[BOOK]',
-      'NAME=acServerManager'
-    ].join('\n');
-
-    // Die entry_list.ini erstellen
-    let entryList = [];
-    
-    // Für jedes Auto einen Eintrag erstellen
-    config.cars.forEach((car, index) => {
-      entryList.push(`[CAR_${index}]`);
-      entryList.push(`MODEL=${car}`);
-      entryList.push(`SKIN=` + (config.skins && config.skins[index] ? config.skins[index] : 'default'));
-      entryList.push(`SPECTATOR_MODE=0`);
-      entryList.push(`DRIVERNAME=`);
-      entryList.push(`TEAM=`);
-      entryList.push(`GUID=`);
-      entryList.push(`BALLAST=0`);
-      entryList.push(`RESTRICTOR=0`);
-      entryList.push('');
-    });
-
-    // Konfigurationsdateien speichern
-    fs.writeFileSync(serverCfgPath, serverCfg);
-    fs.writeFileSync(entryListPath, entryList.join('\n'));
-    
-    console.log(`Konfigurationen gespeichert in:`);
-    console.log(`- Server Config: ${serverCfgPath}`);
-    console.log(`- Entry List: ${entryListPath}`);
+    // Aktualisiere die globale Server-Konfiguration
+    acServerConfig = { ...acServerConfig, ...req.body };
     
     res.json({
       message: 'Konfiguration erfolgreich aktualisiert',
-      config: config
+      config: req.body,
+      paths: result.paths
     });
   } catch (error) {
     console.error('Fehler beim Aktualisieren der Konfiguration:', error);
@@ -757,12 +688,24 @@ app.post('/api/server/start', (req, res) => {
   try {
     console.log('Server wird gestartet...');
     
-    // Pfade zu den Konfigurationsdateien definieren
-    const acServerDir = path.dirname(acServerPath);
-    const cfgDir = path.join(acServerDir, 'cfg');
+    // Aktuelle Konfiguration sichern oder neue Konfiguration verwenden
+    const config = req.body || acServerConfig;
+    
+    // Konfiguration speichern, um sicherzustellen, dass Wetter korrekt konfiguriert ist
+    // Dies verhindert den "invalid argument to Intn" Fehler
+    const configResult = saveServerConfig(config);
+    
+    if (configResult.error) {
+      return res.status(500).json({ error: configResult.error });
+    }
     
     // Verzeichnis überprüfen, in dem sich der Server befindet
+    const acServerDir = path.dirname(acServerPath);
+    
+    // Server starten
     serverStartTime = Date.now();
+    serverOutput = []; // Ausgabe zurücksetzen
+    
     acServerProcess = spawn(acServerPath, [], { 
       cwd: acServerDir, 
       env: { ...process.env },
@@ -772,11 +715,23 @@ app.post('/api/server/start', (req, res) => {
     console.log(`Server gestartet mit PID: ${acServerProcess.pid}`);
 
     acServerProcess.stdout.on('data', (data) => {
-      console.log(`AC Server Ausgabe: ${data}`);
+      const output = data.toString().trim();
+      console.log(`AC Server Ausgabe: ${output}`);
+      // Ausgabe für spätere Anzeige speichern (begrenzt auf die letzten 1000 Zeilen)
+      serverOutput.push(...output.split('\n'));
+      if (serverOutput.length > 1000) {
+        serverOutput = serverOutput.slice(-1000);
+      }
     });
 
     acServerProcess.stderr.on('data', (data) => {
-      console.error(`AC Server Fehler: ${data}`);
+      const error = data.toString().trim();
+      console.error(`AC Server Fehler: ${error}`);
+      // Fehler zur Ausgabe hinzufügen
+      serverOutput.push(`FEHLER: ${error}`);
+      if (serverOutput.length > 1000) {
+        serverOutput = serverOutput.slice(-1000);
+      }
     });
 
     acServerProcess.on('close', (code) => {
@@ -883,4 +838,169 @@ app.listen(PORT, () => {
   } else {
     console.warn('Warnung: AC Server Pfad ist nicht konfiguriert');
   }
-}); 
+});
+
+// Speichern der Serverkonfiguration
+function saveServerConfig(config) {
+  try {
+    if (!config) {
+      console.error("Fehler: Keine Konfiguration angegeben");
+      return { error: "Keine Konfiguration angegeben" };
+    }
+    
+    // Stelle sicher, dass der Konfigurationsordner existiert
+    const cfgDir = path.join(path.dirname(acServerPath), 'cfg');
+    fs.ensureDirSync(cfgDir);
+    
+    // Pfade für die Konfigurationsdateien
+    const serverCfgPath = path.join(cfgDir, 'server_cfg.ini');
+    const entryListPath = path.join(cfgDir, 'entry_list.ini');
+    
+    // Standardwerte für Konfigurationsabschnitte, die fehlen
+    // Dies verhindert Server-Abstürze aufgrund fehlender Konfigurationsparameter
+    const defaultConfig = {
+      // Standard-Wetterkonfiguration, verhindert den "invalid argument to Intn" Fehler
+      WEATHER: {
+        GRAPHICS: "3_clear",
+        BASE_TEMPERATURE_AMBIENT: 18,
+        BASE_TEMPERATURE_ROAD: 6,
+        VARIATION_AMBIENT: 2,
+        VARIATION_ROAD: 1,
+        WIND_BASE_SPEED_MIN: 0,
+        WIND_BASE_SPEED_MAX: 10,
+        WIND_BASE_DIRECTION: 30,
+        WIND_VARIATION_DIRECTION: 15
+      },
+      // Standardwerte für Dynamischer Streckengrip
+      DYNAMIC_TRACK: {
+        SESSION_START: 90,
+        RANDOMNESS: 2,
+        LAP_GAIN: 1,
+        SESSION_TRANSFER: 50
+      },
+      // Standard-Renneinstellungen
+      RACE: {
+        RACE_OVER_TIME: 40,
+        RESULT_SCREEN_TIME: 60
+      }
+    };
+    
+    // Erstellen der server_cfg.ini-Datei im INI-Format
+    let serverCfgContent = "";
+    
+    // Servereinstellungen
+    serverCfgContent += "[SERVER]\n";
+    serverCfgContent += `NAME=${config.serverName || 'Assetto Corsa Server'}\n`;
+    serverCfgContent += `CARS=${(config.cars || []).join(';')}\n`;
+    serverCfgContent += `TRACK=${config.track || 'monza'}\n`;
+    serverCfgContent += `CONFIG_TRACK=${config.trackLayout || ''}\n`;
+    serverCfgContent += `MAX_CLIENTS=${config.maxClients || 15}\n`;
+    serverCfgContent += `PORT=${config.port || 9600}\n`;
+    serverCfgContent += `HTTP_PORT=${config.httpPort || 8081}\n`;
+    serverCfgContent += `REGISTER_TO_LOBBY=${config.registerToLobby || 1}\n`;
+    serverCfgContent += `ADMIN_PASSWORD=${config.adminPassword || 'adminpass'}\n`;
+    serverCfgContent += `PASSWORD=${config.password || ''}\n`;
+    
+    // Weitere Server-Einstellungen können hier hinzugefügt werden
+    
+    // Praxis-Einstellungen (Freies Fahren)
+    serverCfgContent += "\n[PRACTICE]\n";
+    serverCfgContent += `NAME=Freies Fahren\n`;
+    serverCfgContent += `TIME=${config.practiceTime || 30}\n`;
+    serverCfgContent += `IS_OPEN=1\n`;
+    
+    // Qualifikations-Einstellungen
+    serverCfgContent += "\n[QUALIFY]\n";
+    serverCfgContent += `NAME=Qualifikation\n`;
+    serverCfgContent += `TIME=${config.qualifyTime || 15}\n`;
+    serverCfgContent += `IS_OPEN=1\n`;
+    
+    // Rennen-Einstellungen
+    serverCfgContent += "\n[RACE]\n";
+    serverCfgContent += `NAME=Rennen\n`;
+    serverCfgContent += `TIME=${config.raceTime || 20}\n`;
+    serverCfgContent += `LAPS=${config.raceLaps || 5}\n`;
+    serverCfgContent += `IS_OPEN=1\n`;
+    serverCfgContent += `RACE_OVER_TIME=${config.raceOverTime || defaultConfig.RACE.RACE_OVER_TIME}\n`;
+    serverCfgContent += `RESULT_SCREEN_TIME=${config.resultScreenTime || defaultConfig.RACE.RESULT_SCREEN_TIME}\n`;
+    
+    // Wetter-Einstellungen - WICHTIG: Verhindert den "invalid argument to Intn" Fehler
+    serverCfgContent += "\n[WEATHER_0]\n";
+    
+    if (config.weather) {
+      // Wenn Wettereinstellungen in der Konfiguration vorhanden sind, diese verwenden
+      serverCfgContent += `GRAPHICS=${config.weather.graphics || defaultConfig.WEATHER.GRAPHICS}\n`;
+      serverCfgContent += `BASE_TEMPERATURE_AMBIENT=${config.weather.ambientTemp || defaultConfig.WEATHER.BASE_TEMPERATURE_AMBIENT}\n`;
+      serverCfgContent += `BASE_TEMPERATURE_ROAD=${config.weather.roadTemp || defaultConfig.WEATHER.BASE_TEMPERATURE_ROAD}\n`;
+      serverCfgContent += `VARIATION_AMBIENT=${config.weather.ambientVariation || defaultConfig.WEATHER.VARIATION_AMBIENT}\n`;
+      serverCfgContent += `VARIATION_ROAD=${config.weather.roadVariation || defaultConfig.WEATHER.VARIATION_ROAD}\n`;
+      
+      // Windeinstellungen
+      serverCfgContent += `WIND_BASE_SPEED_MIN=${config.weather.windSpeedMin || defaultConfig.WEATHER.WIND_BASE_SPEED_MIN}\n`;
+      serverCfgContent += `WIND_BASE_SPEED_MAX=${config.weather.windSpeedMax || defaultConfig.WEATHER.WIND_BASE_SPEED_MAX}\n`;
+      serverCfgContent += `WIND_BASE_DIRECTION=${config.weather.windDirection || defaultConfig.WEATHER.WIND_BASE_DIRECTION}\n`;
+      serverCfgContent += `WIND_VARIATION_DIRECTION=${config.weather.windVariation || defaultConfig.WEATHER.WIND_VARIATION_DIRECTION}\n`;
+    } else {
+      // Wenn keine Wettereinstellungen vorhanden sind, Standardwerte verwenden
+      serverCfgContent += `GRAPHICS=${defaultConfig.WEATHER.GRAPHICS}\n`;
+      serverCfgContent += `BASE_TEMPERATURE_AMBIENT=${defaultConfig.WEATHER.BASE_TEMPERATURE_AMBIENT}\n`;
+      serverCfgContent += `BASE_TEMPERATURE_ROAD=${defaultConfig.WEATHER.BASE_TEMPERATURE_ROAD}\n`;
+      serverCfgContent += `VARIATION_AMBIENT=${defaultConfig.WEATHER.VARIATION_AMBIENT}\n`;
+      serverCfgContent += `VARIATION_ROAD=${defaultConfig.WEATHER.VARIATION_ROAD}\n`;
+      
+      // Windeinstellungen
+      serverCfgContent += `WIND_BASE_SPEED_MIN=${defaultConfig.WEATHER.WIND_BASE_SPEED_MIN}\n`;
+      serverCfgContent += `WIND_BASE_SPEED_MAX=${defaultConfig.WEATHER.WIND_BASE_SPEED_MAX}\n`;
+      serverCfgContent += `WIND_BASE_DIRECTION=${defaultConfig.WEATHER.WIND_BASE_DIRECTION}\n`;
+      serverCfgContent += `WIND_VARIATION_DIRECTION=${defaultConfig.WEATHER.WIND_VARIATION_DIRECTION}\n`;
+    }
+    
+    // Dynamischer Streckengrip
+    serverCfgContent += "\n[DYNAMIC_TRACK]\n";
+    
+    if (config.dynamicTrack) {
+      serverCfgContent += `SESSION_START=${config.dynamicTrack.sessionStart || defaultConfig.DYNAMIC_TRACK.SESSION_START}\n`;
+      serverCfgContent += `RANDOMNESS=${config.dynamicTrack.randomness || defaultConfig.DYNAMIC_TRACK.RANDOMNESS}\n`;
+      serverCfgContent += `LAP_GAIN=${config.dynamicTrack.lapGain || defaultConfig.DYNAMIC_TRACK.LAP_GAIN}\n`;
+      serverCfgContent += `SESSION_TRANSFER=${config.dynamicTrack.sessionTransfer || defaultConfig.DYNAMIC_TRACK.SESSION_TRANSFER}\n`;
+    } else {
+      serverCfgContent += `SESSION_START=${defaultConfig.DYNAMIC_TRACK.SESSION_START}\n`;
+      serverCfgContent += `RANDOMNESS=${defaultConfig.DYNAMIC_TRACK.RANDOMNESS}\n`;
+      serverCfgContent += `LAP_GAIN=${defaultConfig.DYNAMIC_TRACK.LAP_GAIN}\n`;
+      serverCfgContent += `SESSION_TRANSFER=${defaultConfig.DYNAMIC_TRACK.SESSION_TRANSFER}\n`;
+    }
+    
+    // Erstellen der entry_list.ini-Datei für die Autoeinträge
+    let entryListContent = "";
+    const cars = config.cars || [];
+    
+    cars.forEach((car, index) => {
+      entryListContent += `[CAR_${index}]\n`;
+      entryListContent += `MODEL=${car}\n`;
+      entryListContent += `SKIN=\n`; // Standard-Skin
+      entryListContent += `SPECTATOR_MODE=0\n`;
+      entryListContent += `DRIVERNAME=\n`;
+      entryListContent += `TEAM=\n`;
+      entryListContent += `GUID=\n`;
+      entryListContent += `BALLAST=0\n`;
+      entryListContent += `RESTRICTOR=0\n\n`;
+    });
+    
+    // Schreiben der Konfigurationsdateien
+    fs.writeFileSync(serverCfgPath, serverCfgContent);
+    fs.writeFileSync(entryListPath, entryListContent);
+    
+    console.log(`Konfigurationen gespeichert in:\n- Server Config: ${serverCfgPath}\n- Entry List: ${entryListPath}`);
+    
+    return { 
+      success: true, 
+      paths: { 
+        serverCfg: serverCfgPath, 
+        entryList: entryListPath 
+      } 
+    };
+  } catch (error) {
+    console.error("Fehler beim Speichern der Serverkonfiguration:", error);
+    return { error: `Fehler beim Speichern der Konfiguration: ${error.message}` };
+  }
+} 
