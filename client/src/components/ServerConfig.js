@@ -144,7 +144,7 @@ const ServerConfig = () => {
   // Hilfsfunktion zum Extrahieren des Streckennamens
   const getTrackName = (track) => {
     if (typeof track === 'string') return track;
-    return track.name;
+    return track.id || track.name;
   };
   
   return (
@@ -170,6 +170,18 @@ const ServerConfig = () => {
             ? 'Der Assetto Corsa Server ist aktiv und Spieler können beitreten.' 
             : 'Der Assetto Corsa Server ist derzeit nicht aktiv.'}
         </p>
+      </div>
+      
+      <div className="mt-4">
+        {availableCars.filter(car => car.isStock).length === 0 && (
+          <Alert variant="info">
+            <Alert.Heading>Keine Standard-Autos gefunden</Alert.Heading>
+            <p>
+              Um Standard-Autos und -Strecken aus Ihrer Assetto Corsa Installation zu nutzen, konfigurieren Sie bitte 
+              den Assetto Corsa Pfad in der <a href="/ac-config">AC-Konfiguration</a>.
+            </p>
+          </Alert>
+        )}
       </div>
       
       <Card className="mt-4">
@@ -232,37 +244,74 @@ const ServerConfig = () => {
                             Keine Fahrzeuge verfügbar. Bitte laden Sie zuerst Fahrzeug-Mods hoch oder konfigurieren Sie den Assetto Corsa Pfad.
                           </Alert>
                         ) : (
-                          <div className="mod-list" style={{ maxHeight: '150px', overflowY: 'auto' }}>
-                            {availableCars.map((car, index) => {
-                              const carId = getCarId(car);
-                              const isStock = car.isStock;
-                              const displayName = typeof car === 'string' ? car : car.name || car.id;
-                              
-                              return (
-                                <Form.Check
-                                  key={index}
-                                  type="checkbox"
-                                  id={`car-${index}`}
-                                  label={
-                                    <>
-                                      {displayName}
-                                      {isStock && <Badge bg="success" className="ms-2" pill>Standard</Badge>}
-                                    </>
-                                  }
-                                  checked={values.cars.includes(carId)}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setFieldValue('cars', [...values.cars, carId]);
-                                    } else {
-                                      setFieldValue(
-                                        'cars',
-                                        values.cars.filter((c) => c !== carId)
-                                      );
+                          <div className="mod-list" style={{ maxHeight: '250px', overflowY: 'auto' }}>
+                            {/* Gruppiere in Standard-Autos und Mods */}
+                            <div className="mb-2">
+                              <strong>Standard-Autos</strong>
+                              {availableCars.filter(car => car.isStock).length === 0 && (
+                                <p className="text-muted small">Keine Standard-Autos verfügbar. Bitte konfigurieren Sie den Assetto Corsa Pfad.</p>
+                              )}
+                              {availableCars.filter(car => car.isStock).map((car, index) => {
+                                const carId = getCarId(car);
+                                const displayName = typeof car === 'string' ? car : car.name || car.id;
+                                
+                                return (
+                                  <Form.Check
+                                    key={`stock-${index}`}
+                                    type="checkbox"
+                                    id={`car-stock-${index}`}
+                                    label={
+                                      <>
+                                        {displayName}
+                                        <Badge bg="success" className="ms-2" pill>Standard</Badge>
+                                      </>
                                     }
-                                  }}
-                                />
-                              );
-                            })}
+                                    checked={values.cars.includes(carId)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setFieldValue('cars', [...values.cars, carId]);
+                                      } else {
+                                        setFieldValue(
+                                          'cars',
+                                          values.cars.filter((c) => c !== carId)
+                                        );
+                                      }
+                                    }}
+                                  />
+                                );
+                              })}
+                            </div>
+                            
+                            <div>
+                              <strong>Mods</strong>
+                              {availableCars.filter(car => !car.isStock).length === 0 && (
+                                <p className="text-muted small">Keine Fahrzeug-Mods verfügbar. Bitte laden Sie zuerst Mods hoch.</p>
+                              )}
+                              {availableCars.filter(car => !car.isStock).map((car, index) => {
+                                const carId = getCarId(car);
+                                const displayName = typeof car === 'string' ? car : car.name || car.id;
+                                
+                                return (
+                                  <Form.Check
+                                    key={`mod-${index}`}
+                                    type="checkbox"
+                                    id={`car-mod-${index}`}
+                                    label={displayName}
+                                    checked={values.cars.includes(carId)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setFieldValue('cars', [...values.cars, carId]);
+                                      } else {
+                                        setFieldValue(
+                                          'cars',
+                                          values.cars.filter((c) => c !== carId)
+                                        );
+                                      }
+                                    }}
+                                  />
+                                );
+                              })}
+                            </div>
                           </div>
                         )}
                         {touched.cars && errors.cars && (
@@ -287,14 +336,14 @@ const ServerConfig = () => {
                             <option value="">Strecke auswählen</option>
                             <optgroup label="Standard-Strecken">
                               {availableTracks.filter(track => track.isStock).map((track, index) => (
-                                <option key={`stock-${index}`} value={track.name}>
+                                <option key={`stock-${index}`} value={getTrackName(track)}>
                                   {track.name}
                                 </option>
                               ))}
                             </optgroup>
                             <optgroup label="Strecken-Mods">
                               {availableTracks.filter(track => !track.isStock).map((track, index) => (
-                                <option key={`mod-${index}`} value={track.name}>
+                                <option key={`mod-${index}`} value={getTrackName(track)}>
                                   {track.name}
                                 </option>
                               ))}
@@ -316,8 +365,8 @@ const ServerConfig = () => {
                         >
                           <option value="">Standard-Layout</option>
                           {availableTracks
-                            .find((track) => getTrackName(track) === values.track)
-                            ?.layouts.map((layout, index) => (
+                            .find((track) => getTrackName(track) === values.track || track.name === values.track)
+                            ?.layouts?.map((layout, index) => (
                               <option key={index} value={layout}>
                                 {layout || 'Default'}
                               </option>
