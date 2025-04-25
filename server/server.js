@@ -330,6 +330,16 @@ app.get('/api/stock-tracks', async (req, res) => {
   }
 });
 
+// Aktuelle Serverkonfiguration abrufen
+app.get('/api/server/config', (req, res) => {
+  try {
+    res.json(acServerConfig);
+  } catch (error) {
+    console.error('Fehler beim Abrufen der Serverkonfiguration:', error);
+    res.status(500).json({ error: 'Fehler beim Abrufen der Serverkonfiguration' });
+  }
+});
+
 // Hochladen von Car-Mods
 app.post('/api/upload/car', uploadCar.single('carmod'), async (req, res) => {
   try {
