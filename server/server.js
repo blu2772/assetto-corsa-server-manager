@@ -10,6 +10,61 @@ const ini = require('ini');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Konfigurationsdatei für Pfade
+const configFilePath = path.join(__dirname, 'config.json');
+
+// Lade bestehende Konfiguration beim Start
+let configData = {
+  acServerPath: '',
+  acInstallPath: ''
+};
+
+// Funktion zum Laden der Konfiguration
+function loadConfig() {
+  try {
+    if (fs.existsSync(configFilePath)) {
+      const configContent = fs.readFileSync(configFilePath, 'utf8');
+      const loadedConfig = JSON.parse(configContent);
+      
+      // Übertrage Werte aus der geladenen Konfiguration
+      if (loadedConfig.acServerPath) {
+        acServerPath = loadedConfig.acServerPath;
+        console.log(`Geladen: Assetto Corsa Server Pfad: ${acServerPath}`);
+      }
+      
+      if (loadedConfig.acInstallPath) {
+        acConfig.acPath = loadedConfig.acInstallPath;
+        updateAcPaths();
+        console.log(`Geladen: Assetto Corsa Installation Pfad: ${acConfig.acPath}`);
+      }
+      
+      return loadedConfig;
+    }
+  } catch (error) {
+    console.error('Fehler beim Laden der Konfigurationsdatei:', error);
+  }
+  return configData;
+}
+
+// Funktion zum Speichern der Konfiguration
+function saveConfig() {
+  try {
+    // Aktualisiere die Konfigurationsdaten mit den aktuellen Werten
+    configData = {
+      acServerPath: acServerPath,
+      acInstallPath: acConfig.acPath
+    };
+    
+    fs.writeFileSync(configFilePath, JSON.stringify(configData, null, 2));
+    console.log('Konfiguration gespeichert in:', configFilePath);
+  } catch (error) {
+    console.error('Fehler beim Speichern der Konfigurationsdatei:', error);
+  }
+}
+
+// Lade Konfiguration beim Start
+configData = loadConfig();
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -347,58 +402,41 @@ app.get('/api/stock-tracks', async (req, res) => {
   }
 });
 
-// GET: Servereinstellungen abrufen
+// GET: Serverkonfiguration abrufen
 app.get('/api/server/config', (req, res) => {
   try {
-    const cfgDir = path.join(path.dirname(acServerPath), 'cfg');
+    // Pfade zu den Konfigurationsdateien definieren
+    const acServerDir = path.dirname(acServerPath);
+    const cfgDir = path.join(acServerDir, 'cfg');
     const serverCfgPath = path.join(cfgDir, 'server_cfg.ini');
-    const entryListPath = path.join(cfgDir, 'entry_list.ini');
     
-    console.log(`Lese Konfiguration von: ${serverCfgPath}`);
-    console.log(`Lese Eintragsliste von: ${entryListPath}`);
-    
-    let config = {};
-    
-    // Prüfen, ob die Dateien existieren
-    if (fs.existsSync(serverCfgPath) && fs.existsSync(entryListPath)) {
-      // server_cfg.ini einlesen
-      const serverCfg = ini.parse(fs.readFileSync(serverCfgPath, 'utf-8'));
-      
-      // Basis-Konfiguration aus server_cfg.ini
-      config = {
-        serverName: serverCfg.SERVER?.NAME || 'Assetto Corsa Server',
-        cars: serverCfg.SERVER?.CARS?.split(';') || ['bmw_m3_e30'],
-        track: serverCfg.SERVER?.TRACK || 'magione',
-        trackLayout: serverCfg.SERVER?.CONFIG || '',
-        maxClients: parseInt(serverCfg.SERVER?.MAX_CLIENTS || 5),
-        port: parseInt(serverCfg.SERVER?.UDP_PORT || 9600),
-        httpPort: parseInt(serverCfg.SERVER?.HTTP_PORT || 8081),
-        registerToLobby: serverCfg.SERVER?.REGISTER_TO_LOBBY === '1',
-        password: serverCfg.SERVER?.PASSWORD || '',
-        adminPassword: serverCfg.SERVER?.ADMIN_PASSWORD || ''
-      };
-      
-      console.log('Konfiguration erfolgreich geladen:', config);
-    } else {
-      console.log('Keine Konfigurationsdateien gefunden, verwende Standardeinstellungen');
-      config = {
-        serverName: 'Assetto Corsa Server',
-        cars: ['bmw_m3_e30'],
-        track: 'magione',
-        trackLayout: '',
-        maxClients: 5,
-        port: 9600,
-        httpPort: 8081,
-        registerToLobby: true,
-        password: '',
-        adminPassword: ''
-      };
+    // Überprüfen, ob die Konfigurationsdatei existiert
+    if (!fs.existsSync(serverCfgPath)) {
+      return res.status(404).json({ error: 'Serverkonfiguration nicht gefunden' });
     }
+    
+    // Serverkonfiguration aus der Datei lesen
+    const serverCfgContent = fs.readFileSync(serverCfgPath, 'utf8');
+    const configData = ini.parse(serverCfgContent);
+    
+    // Konfiguration in ein strukturiertes Objekt umwandeln
+    const config = {
+      serverName: configData.SERVER?.NAME || 'Mein Assetto Corsa Server',
+      cars: configData.SERVER?.CARS ? configData.SERVER.CARS.split(';') : [],
+      track: configData.SERVER?.TRACK || '',
+      trackLayout: configData.SERVER?.CONFIG_TRACK || '',
+      maxClients: parseInt(configData.SERVER?.MAX_CLIENTS || '18'),
+      port: parseInt(configData.SERVER?.UDP_PORT || '9600'),
+      httpPort: parseInt(configData.SERVER?.HTTP_PORT || '8081'),
+      password: configData.SERVER?.PASSWORD || '',
+      adminPassword: configData.SERVER?.ADMIN_PASSWORD || 'admin',
+      registerToLobby: parseInt(configData.SERVER?.REGISTER_TO_LOBBY || '1')
+    };
     
     res.json(config);
   } catch (error) {
-    console.error('Fehler beim Abrufen der Konfiguration:', error);
-    res.status(500).json({ error: 'Fehler beim Abrufen der Konfiguration' });
+    console.error('Fehler beim Abrufen der Serverkonfiguration:', error);
+    res.status(500).json({ error: 'Fehler beim Abrufen der Serverkonfiguration' });
   }
 });
 
@@ -842,14 +880,6 @@ app.post('/api/server/config', (req, res) => {
   try {
     console.log('Neue Serverkonfiguration erhalten:', JSON.stringify(req.body, null, 2));
     
-    // Alten Konfigurationswert sichern
-    Object.assign(acServerConfig, req.body);
-    
-    // Sicherstellen, dass die Autos als Array vorliegen
-    if (!Array.isArray(acServerConfig.cars)) {
-      acServerConfig.cars = [acServerConfig.cars];
-    }
-    
     // Pfade zu den Konfigurationsdateien definieren
     const acServerDir = path.dirname(acServerPath);
     const cfgDir = path.join(acServerDir, 'cfg');
@@ -862,19 +892,27 @@ app.post('/api/server/config', (req, res) => {
       fs.mkdirSync(cfgDir, { recursive: true });
     }
 
+    // Aktualisiere die Serverkonfiguration im acServerConfig-Objekt
+    const config = req.body;
+    
+    // Sicherstellen, dass die Autos als Array vorliegen
+    if (!Array.isArray(config.cars)) {
+      config.cars = [config.cars];
+    }
+
     // Die server_cfg.ini erstellen
     const serverCfg = [
       '[SERVER]',
-      `NAME=${acServerConfig.serverName}`,
-      `CARS=${acServerConfig.cars.join(';')}`,
-      `TRACK=${acServerConfig.track}`,
-      `CONFIG_TRACK=${acServerConfig.trackLayout || ''}`,
-      `MAX_CLIENTS=${acServerConfig.maxClients || 18}`,
-      `ADMIN_PASSWORD=${acServerConfig.adminPassword || 'admin'}`,
-      `UDP_PORT=${acServerConfig.port || 9600}`,
-      `TCP_PORT=${acServerConfig.port || 9600}`,
-      `HTTP_PORT=${acServerConfig.httpPort || 8081}`,
-      `PASSWORD=${acServerConfig.password || ''}`,
+      `NAME=${config.serverName}`,
+      `CARS=${config.cars.join(';')}`,
+      `TRACK=${config.track}`,
+      `CONFIG_TRACK=${config.trackLayout || ''}`,
+      `MAX_CLIENTS=${config.maxClients || 18}`,
+      `ADMIN_PASSWORD=${config.adminPassword || 'admin'}`,
+      `UDP_PORT=${config.port || 9600}`,
+      `TCP_PORT=${config.port || 9600}`,
+      `HTTP_PORT=${config.httpPort || 8081}`,
+      `PASSWORD=${config.password || ''}`,
       '',
       '[PRACTICE]',
       'NAME=Freies Fahren',
@@ -902,10 +940,10 @@ app.post('/api/server/config', (req, res) => {
     let entryList = [];
     
     // Für jedes Auto einen Eintrag erstellen
-    acServerConfig.cars.forEach((car, index) => {
+    config.cars.forEach((car, index) => {
       entryList.push(`[CAR_${index}]`);
       entryList.push(`MODEL=${car}`);
-      entryList.push(`SKIN=` + (acServerConfig.skins && acServerConfig.skins[index] ? acServerConfig.skins[index] : 'default'));
+      entryList.push(`SKIN=` + (config.skins && config.skins[index] ? config.skins[index] : 'default'));
       entryList.push(`SPECTATOR_MODE=0`);
       entryList.push(`DRIVERNAME=`);
       entryList.push(`TEAM=`);
@@ -923,12 +961,9 @@ app.post('/api/server/config', (req, res) => {
     console.log(`- Server Config: ${serverCfgPath}`);
     console.log(`- Entry List: ${entryListPath}`);
     
-    // Lokale Kopie der Konfiguration aktualisieren
-    saveServerConfig();
-    
     res.json({
       message: 'Konfiguration erfolgreich aktualisiert',
-      config: acServerConfig
+      config: config
     });
   } catch (error) {
     console.error('Fehler beim Aktualisieren der Konfiguration:', error);
@@ -943,6 +978,10 @@ app.post('/api/server-path', (req, res) => {
     
     if (serverPath) {
       acServerPath = serverPath;
+      
+      // Konfiguration speichern
+      saveConfig();
+      
       res.json({ 
         message: 'Assetto Corsa Server Pfad aktualisiert',
         serverPath: acServerPath
@@ -1028,50 +1067,6 @@ app.post('/api/server/stop', (req, res) => {
   }
 });
 
-// Hilfsfunktion zum Speichern der Serverkonfiguration
-function saveServerConfig() {
-  const serverConfigPath = path.join(path.dirname(acServerPath), 'cfg/server_cfg.ini');
-  const entryListPath = path.join(path.dirname(acServerPath), 'cfg/entry_list.ini');
-  
-  // Sicherstellen, dass das cfg-Verzeichnis existiert
-  fs.ensureDirSync(path.join(path.dirname(acServerPath), 'cfg'));
-  
-  console.log('Speichere Konfiguration nach:', serverConfigPath);
-  console.log('Aktuelle Konfiguration:', JSON.stringify(acServerConfig, null, 2));
-  
-  // server_cfg.ini erstellen
-  const serverCfg = {
-    SERVER: {
-      NAME: acServerConfig.serverName,
-      CARS: acServerConfig.cars.join(';'),
-      TRACK: acServerConfig.track,
-      CONFIG: acServerConfig.trackLayout,
-      MAX_CLIENTS: acServerConfig.maxClients,
-      PORT: acServerConfig.port,
-      HTTP_PORT: acServerConfig.httpPort,
-      REGISTER_TO_LOBBY: acServerConfig.registerToLobby,
-      PASSWORD: acServerConfig.password,
-      ADMIN_PASSWORD: acServerConfig.adminPassword
-    }
-  };
-  
-  fs.writeFileSync(serverConfigPath, ini.stringify(serverCfg));
-  
-  // entry_list.ini erstellen (vereinfacht)
-  let entryList = '';
-  acServerConfig.cars.forEach((car, index) => {
-    entryList += `[CAR_${index}]\n`;
-    entryList += `MODEL=${car}\n`;
-    entryList += `SKIN=\n`;
-    entryList += `BALLAST=0\n`;
-    entryList += `RESTRICTOR=0\n\n`;
-  });
-  
-  fs.writeFileSync(entryListPath, entryList);
-  
-  console.log('Konfigurationsdateien erfolgreich gespeichert');
-}
-
 // POST: AC Installation Pfad aktualisieren
 app.post('/api/ac-path', (req, res) => {
   try {
@@ -1101,6 +1096,9 @@ app.post('/api/ac-path', (req, res) => {
     acConfig.acPath = acPath;
     updateAcPaths();
     
+    // Konfiguration dauerhaft speichern
+    saveConfig();
+    
     res.json({ 
       message: 'Assetto Corsa Installationspfad aktualisiert',
       acPath: acConfig.acPath,
@@ -1122,16 +1120,18 @@ app.get('*', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server läuft auf Port ${PORT}`);
   console.log(`Assetto Corsa Server Pfad: ${acServerPath}`);
+  console.log(`Assetto Corsa Installation Pfad: ${acConfig.acPath}`);
   
   // Stellen Sie sicher, dass die Upload- und Konfigurations-Verzeichnisse existieren
   fs.ensureDirSync(path.join(__dirname, 'uploads/cars'));
   fs.ensureDirSync(path.join(__dirname, 'uploads/tracks'));
   
   // Sicherstellen, dass das cfg-Verzeichnis im Assetto Corsa Verzeichnis existiert
-  const cfgDir = path.join(path.dirname(acServerPath), 'cfg');
-  fs.ensureDirSync(cfgDir);
-  console.log(`Assetto Corsa cfg-Verzeichnis: ${cfgDir}`);
-  
-  // Initialen Serverkonfigurationsdateien erstellen
-  saveServerConfig();
+  if (acServerPath) {
+    const cfgDir = path.join(path.dirname(acServerPath), 'cfg');
+    fs.ensureDirSync(cfgDir);
+    console.log(`Assetto Corsa cfg-Verzeichnis: ${cfgDir}`);
+  } else {
+    console.warn('Warnung: AC Server Pfad ist nicht konfiguriert');
+  }
 }); 
